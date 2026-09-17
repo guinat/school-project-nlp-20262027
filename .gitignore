@@ -8,3 +8,8 @@ wheels/
 
 # Virtual environments
 .venv
+venv/
+.ipynb_checkpoints/
+
+# Data
+data/raw/
