@@ -41,7 +41,8 @@ DEFAULT_CONFIG = {
     "batch_size": 64,
     "epochs": 20,
     "patience": 4,
-    "prediction_threshold": 0.5,
+    # Always keep the top label. Add a 2nd/3rd only if its probability is clearly high.
+    "extra_label_threshold": 0.8,
 }
 
 
@@ -158,9 +159,28 @@ class DeepLearningModel:
     history: dict
 
 
-def compute_metrics(y_true: np.ndarray, logits: np.ndarray, threshold: float) -> dict:
+def decode_probabilities(
+    probabilities: np.ndarray,
+    extra_threshold: float,
+) -> np.ndarray:
+    """Predict at least one label (argmax). Extra labels only if probability is high."""
+    predictions = np.zeros_like(probabilities, dtype=int)
+    top = probabilities.argmax(axis=1)
+    rows = np.arange(len(probabilities))
+    predictions[rows, top] = 1
+    extra = probabilities >= extra_threshold
+    extra[rows, top] = False
+    predictions[extra] = 1
+    return predictions
+
+
+def compute_metrics(
+    y_true: np.ndarray,
+    logits: np.ndarray,
+    extra_threshold: float,
+) -> dict:
     probabilities = 1 / (1 + np.exp(-logits))
-    predictions = (probabilities >= threshold).astype(int)
+    predictions = decode_probabilities(probabilities, extra_threshold)
     y_true = y_true.astype(int)
 
     precision, recall, f1, _ = precision_recall_fscore_support(
@@ -275,7 +295,7 @@ def train(train_data, validation_data, config: dict | None = None) -> DeepLearni
     best_f1 = -1.0
     best_state = None
     epochs_without_improve = 0
-    threshold = float(cfg["prediction_threshold"])
+    extra_threshold = float(cfg["extra_label_threshold"])
 
     print(f"Device: {device}")
     print(f"Representation: TF-IDF ngrams={cfg['ngram_range']} max_features={cfg['max_features']}")
@@ -283,6 +303,7 @@ def train(train_data, validation_data, config: dict | None = None) -> DeepLearni
     print(f"Loss: BCEWithLogitsLoss with pos_weight (class imbalance)")
     print(f"Optimizer: Adam lr={cfg['learning_rate']} weight_decay={cfg['weight_decay']}")
     print(f"Batch size: {cfg['batch_size']}  Epochs: {cfg['epochs']}  Seed: {cfg['seed']}")
+    print(f"Decode: argmax + extra labels only if p >= {extra_threshold}")
     print(f"Train examples: {len(train_df)}  Validation examples: {len(validation_df)}")
     print(f"Vocabulary size: {x_train.shape[1]}")
 
@@ -297,7 +318,7 @@ def train(train_data, validation_data, config: dict | None = None) -> DeepLearni
             val_loss, y_true, logits = _run_epoch(
                 network, validation_loader, criterion, device
             )
-        val_metrics = compute_metrics(y_true, logits, threshold)
+        val_metrics = compute_metrics(y_true, logits, extra_threshold)
 
         history["train_loss"].append(train_loss)
         history["validation_loss"].append(val_loss)
@@ -359,17 +380,13 @@ def predict(model: DeepLearningModel, texts) -> list[list[str]]:
 
     logits = np.concatenate(logits_all)
     probabilities = 1 / (1 + np.exp(-logits))
-    threshold = float(model.config["prediction_threshold"])
+    extra_threshold = float(model.config.get("extra_label_threshold", 0.8))
+    predicted = decode_probabilities(probabilities, extra_threshold)
 
-    predictions = []
-    for row in probabilities:
-        labels = [
-            model.labels[index]
-            for index, value in enumerate(row)
-            if value >= threshold
-        ]
-        predictions.append(labels)
-    return predictions
+    return [
+        [model.labels[index] for index, value in enumerate(row) if value]
+        for row in predicted
+    ]
 
 
 def save_model(model: DeepLearningModel, output_dir: str | Path) -> Path:
