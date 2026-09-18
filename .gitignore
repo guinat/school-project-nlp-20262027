@@ -13,3 +13,6 @@ venv/
 
 # Data
 data/raw/
+
+# OS files
+.DS_Store
