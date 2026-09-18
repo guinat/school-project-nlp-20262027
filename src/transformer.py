@@ -1,9 +1,13 @@
 import argparse
 import ast
 import json
+import os
 import random
 import time
 from pathlib import Path
+
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 import numpy as np
 import pandas as pd
@@ -12,6 +16,7 @@ from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
+    DataCollatorWithPadding,
     Trainer,
     TrainingArguments,
     set_seed,
@@ -43,7 +48,26 @@ LABELS = [
 LABEL2ID = {label: i for i, label in enumerate(LABELS)}
 ID2LABEL = {i: label for i, label in enumerate(LABELS)}
 
-# Seeding 
+
+def get_device_name() -> str:
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
+def mps_bf16_supported() -> bool:
+    if not torch.backends.mps.is_available():
+        return False
+    if hasattr(torch.backends.mps, "is_macos_or_newer"):
+        return torch.backends.mps.is_macos_or_newer(14, 0)
+    if hasattr(torch.mps, "is_bf16_supported"):
+        return bool(torch.mps.is_bf16_supported())
+    return False
+
+
+# Seeding
 def seed_everything(seed: int = SEED) -> None:
     random.seed(seed)
     np.random.seed(seed)
@@ -52,6 +76,8 @@ def seed_everything(seed: int = SEED) -> None:
 
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+    if torch.backends.mps.is_available() and hasattr(torch.mps, "manual_seed"):
+        torch.mps.manual_seed(seed)
 
 
 # Data loading
@@ -139,6 +165,209 @@ def tokenize_dataset(df: pd.DataFrame, tokenizer) -> Dataset:
     return dataset
 
 
+def precision_settings() -> tuple[str, str, dict]:
+    device = get_device_name()
+    use_fp16 = device == "cuda"
+    use_bf16 = device == "mps" and mps_bf16_supported()
+    if use_bf16:
+        precision = "bf16"
+    elif use_fp16:
+        precision = "fp16"
+    else:
+        precision = "fp32"
+    return device, precision, {
+        "fp16": use_fp16,
+        "bf16": use_bf16,
+        "dataloader_pin_memory": device == "cuda",
+    }
+
+
+def resolve_model_dir(output_dir: str | Path, model_dir: str | None) -> Path:
+    path = Path(model_dir) if model_dir else Path(output_dir) / "best_model"
+    has_weights = (path / "model.safetensors").exists() or (
+        path / "pytorch_model.bin"
+    ).exists()
+    if not path.exists() or not has_weights:
+        raise FileNotFoundError(
+            f"No saved model found at {path}. "
+            "Train first with: .venv/bin/python src/transformer.py"
+        )
+    return path
+
+
+def load_eval_trainer(model_dir: str | Path, output_dir: str):
+    device, _, precision_kwargs = precision_settings()
+    print(f"Device: {device}")
+    print(f"Loading model from: {model_dir}")
+    print("Skipping training.")
+
+    tokenizer = AutoTokenizer.from_pretrained(model_dir)
+    model = AutoModelForSequenceClassification.from_pretrained(model_dir)
+
+    trainer = Trainer(
+        model=model,
+        args=TrainingArguments(
+            output_dir=output_dir,
+            per_device_eval_batch_size=BATCH_SIZE,
+            report_to="none",
+            **precision_kwargs,
+        ),
+        processing_class=tokenizer,
+        data_collator=DataCollatorWithPadding(tokenizer),
+        compute_metrics=compute_metrics,
+    )
+    return trainer, tokenizer
+
+
+def _metrics_table(title: str, metrics: dict, mapping: list[tuple[str, str]]) -> str:
+    rows = [
+        f"| {label} | {float(metrics[key]):.4f} |"
+        for label, key in mapping
+        if key in metrics
+    ]
+    if not rows:
+        return ""
+    return (
+        f"## {title}\n\n"
+        "| Metric | Value |\n| --- | --- |\n"
+        + "\n".join(rows)
+        + "\n"
+    )
+
+
+def write_model_card(model_dir: Path, repo_id: str) -> None:
+    output_dir = model_dir.parent
+    val_mapping = [
+        ("F1 macro", "eval_f1_macro"),
+        ("F1 micro", "eval_f1_micro"),
+        ("Precision macro", "eval_precision_macro"),
+        ("Recall macro", "eval_recall_macro"),
+        ("Accuracy (exact match)", "eval_accuracy"),
+    ]
+    test_mapping = [
+        ("F1 macro", "f1_macro"),
+        ("F1 micro", "f1_micro"),
+        ("Precision macro", "precision_macro"),
+        ("Recall macro", "recall_macro"),
+        ("Accuracy (exact match)", "accuracy"),
+    ]
+
+    metrics_block = ""
+    config_path = output_dir / "config.json"
+    if config_path.exists():
+        with open(config_path, encoding="utf-8") as f:
+            cfg = json.load(f)
+        metrics_block += _metrics_table(
+            "Metrics (validation)",
+            cfg.get("validation_metrics", {}),
+            val_mapping,
+        )
+
+    test_path = output_dir / "test_metrics.json"
+    if test_path.exists():
+        with open(test_path, encoding="utf-8") as f:
+            test_metrics = json.load(f)
+        if metrics_block:
+            metrics_block += "\n"
+        metrics_block += _metrics_table(
+            "Metrics (test)",
+            test_metrics,
+            test_mapping,
+        )
+
+    labels = ", ".join(f"`{label}`" for label in LABELS)
+    card = f"""---
+library_name: transformers
+pipeline_tag: text-classification
+tags:
+  - distilbert
+  - multi-label
+  - book-genre
+base_model: distilbert-base-uncased
+---
+
+# DistilBERT — book genre multi-label classifier
+
+Fine-tune of [`distilbert-base-uncased`](https://huggingface.co/distilbert-base-uncased)
+on book summaries. A title can have several genres.
+
+**Labels:** {labels}
+
+**Prediction threshold:** {PREDICTION_THRESHOLD}
+
+{metrics_block}
+## Usage
+
+```python
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+import torch
+
+repo = "{repo_id}"
+tokenizer = AutoTokenizer.from_pretrained(repo)
+model = AutoModelForSequenceClassification.from_pretrained(repo)
+
+text = "A young wizard discovers a hidden school of magic."
+inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=256)
+with torch.no_grad():
+    probs = torch.sigmoid(model(**inputs).logits)[0]
+
+predicted = [
+    model.config.id2label[i]
+    for i, probability in enumerate(probs.tolist())
+    if probability >= {PREDICTION_THRESHOLD}
+]
+print(predicted)
+```
+"""
+    (model_dir / "README.md").write_text(card, encoding="utf-8")
+
+
+def push_model_to_hub(
+    model_dir: str | Path,
+    repo_id: str | None = None,
+    private: bool = False,
+) -> str:
+    from huggingface_hub import HfApi, whoami
+    from huggingface_hub.errors import LocalTokenNotFoundError
+
+    model_dir = Path(model_dir)
+    try:
+        user = whoami()
+    except LocalTokenNotFoundError as exc:
+        raise SystemExit(
+            "Not logged in to Hugging Face.\n"
+            "Run: .venv/bin/hf auth login"
+        ) from exc
+
+    username = user["name"]
+    if repo_id is None:
+        repo_id = f"{username}/distilbert-book-genre-multilabel"
+    elif "/" not in repo_id:
+        repo_id = f"{username}/{repo_id}"
+
+    write_model_card(model_dir, repo_id)
+    print(f"Uploading {model_dir} -> {repo_id}")
+
+    api = HfApi()
+    api.create_repo(
+        repo_id,
+        exist_ok=True,
+        private=private,
+        repo_type="model",
+    )
+    api.upload_folder(
+        folder_path=str(model_dir),
+        repo_id=repo_id,
+        repo_type="model",
+        ignore_patterns=["training_args.bin", ".DS_Store"],
+        commit_message="Upload DistilBERT multi-label book genre classifier",
+    )
+
+    url = f"https://huggingface.co/{repo_id}"
+    print(f"Uploaded to {url}")
+    return url
+
+
 # Metrics used during validation
 def compute_metrics(eval_prediction):
     logits, labels = eval_prediction
@@ -177,13 +406,16 @@ def train_transformer(
 ):
     seed_everything(SEED)
 
-    print(f"Device: {'cuda' if torch.cuda.is_available() else 'cpu'}")
+    device, precision, precision_kwargs = precision_settings()
+
+    print(f"Device: {device}")
     print(f"Model: {MODEL_NAME}")
     print(f"Max length: {MAX_LENGTH}")
     print(f"Batch size: {BATCH_SIZE}")
     print(f"Learning rate: {LEARNING_RATE}")
     print(f"Epochs: {NUM_EPOCHS}")
     print(f"Seed: {SEED}")
+    print(f"Mixed precision: {precision}")
 
     train_df = load_split(train_path)
     validation_df = load_split(validation_path)
@@ -220,7 +452,7 @@ def train_transformer(
         report_to="none",
         seed=SEED,
         data_seed=SEED,
-        fp16=torch.cuda.is_available(),
+        **precision_kwargs,
     )
 
     trainer = Trainer(
@@ -229,6 +461,7 @@ def train_transformer(
         train_dataset=train_dataset,
         eval_dataset=validation_dataset,
         processing_class=tokenizer,
+        data_collator=DataCollatorWithPadding(tokenizer),
         compute_metrics=compute_metrics,
     )
 
@@ -259,6 +492,8 @@ def train_transformer(
                 "weight_decay": WEIGHT_DECAY,
                 "prediction_threshold": PREDICTION_THRESHOLD,
                 "seed": SEED,
+                "device": device,
+                "mixed_precision": precision,
                 "labels": LABELS,
                 "train_time_seconds": train_time,
                 "validation_metrics": {
@@ -381,24 +616,54 @@ def main():
     parser.add_argument(
         "--evaluate-test",
         action="store_true",
-        help="Run the final test evaluation. Do not use during tuning.",
+        help="Evaluate a saved model on the test set. Does not train.",
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="Saved model directory. Defaults to {output}/best_model.",
+    )
+    parser.add_argument(
+        "--push-to-hub",
+        action="store_true",
+        help="Upload the saved model to the Hugging Face Hub.",
+    )
+    parser.add_argument(
+        "--hub-repo",
+        default=None,
+        help="Hub repo id (username/name). Defaults to <you>/distilbert-book-genre-multilabel.",
+    )
+    parser.add_argument(
+        "--hub-private",
+        action="store_true",
+        help="Create the Hub repository as private.",
     )
 
     args = parser.parse_args()
 
-    trainer, tokenizer, _ = train_transformer(
+    if args.evaluate_test or args.push_to_hub:
+        model_dir = resolve_model_dir(args.output, args.model)
+        if args.evaluate_test:
+            trainer, tokenizer = load_eval_trainer(model_dir, args.output)
+            evaluate_test(
+                trainer,
+                tokenizer,
+                args.test,
+                args.output,
+            )
+        if args.push_to_hub:
+            push_model_to_hub(
+                model_dir,
+                args.hub_repo,
+                private=args.hub_private,
+            )
+        return
+
+    train_transformer(
         args.train,
         args.validation,
         args.output,
     )
-
-    if args.evaluate_test:
-        evaluate_test(
-            trainer,
-            tokenizer,
-            args.test,
-            args.output,
-        )
 
 
 if __name__ == "__main__":
