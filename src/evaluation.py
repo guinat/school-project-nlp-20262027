@@ -447,16 +447,16 @@ def plot_confusion_matrices(matrices: dict, path=None, ncols=None):
         for i in range(counts.shape[0]):
             for j in range(counts.shape[1]):
                 if counts[i, j]:
-                    ax.text(j, i, counts[i, j], ha="center", va="center", fontsize=7,
+                    ax.text(j, i, counts[i, j], ha="center", va="center", fontsize=9,
                             color="white" if share[i, j] > 0.5 else INK)
         ax.set_xticks(range(counts.shape[1]), matrix.columns, rotation=60,
-                      ha="right", fontsize=7.5)
+                      ha="right", fontsize=9)
         ax.set_yticks(range(counts.shape[0]),
                       [f"{g} ({n})" for g, n in zip(matrix.index, counts.sum(axis=1))],
-                      fontsize=7.5)
-        ax.set_xlabel("prédit (top-1 si erreur)", fontsize=8, color=INK_MUTED)
-        ax.set_ylabel("vrai genre (effectif)", fontsize=8, color=INK_MUTED)
-        ax.set_title(name, fontsize=9.5, color=INK)
+                      fontsize=9)
+        ax.set_xlabel("prédit (top-1 si erreur)", fontsize=9.5, color=INK_MUTED)
+        ax.set_ylabel("vrai genre (effectif)", fontsize=9.5, color=INK_MUTED)
+        ax.set_title(name, fontsize=11.5, color=INK)
         for spine in ax.spines.values():
             spine.set_visible(False)
         ax.tick_params(length=0)

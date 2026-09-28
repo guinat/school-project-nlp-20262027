@@ -124,6 +124,20 @@ def check_against_delivered_files(predictions: dict) -> None:
             raise AssertionError(f"{system}: {len(same) - sum(same)} predictions differ")
 
 
+def per_class_grid(validation_truth) -> pd.DataFrame:
+    """F1 of each genre on validation for each threshold of the grid: shows
+    which genres drive the choice of the threshold."""
+    rows = []
+    for system, decode in decoders().items():
+        scores = load_scores(system, "validation")
+        for value in THRESHOLD_GRID:
+            report = ev.per_class_report(validation_truth, decode(scores, value))
+            for genre, f1 in zip(report["genre"], report["f1"]):
+                rows.append({"système": NAMES[system], "threshold": grid_label(value),
+                             "genre": genre, "f1": f1})
+    return pd.DataFrame(rows)
+
+
 def select_decoding(validation_truth) -> tuple[dict, pd.DataFrame]:
     """Choose the threshold of each system on validation only."""
     chosen, tables = {}, []
@@ -395,6 +409,7 @@ def _run_analysis() -> dict:
     # 1. Harmonised decoding: threshold chosen on validation, applied once to test.
     chosen, grid = select_decoding(validation["labels"])
     ev.save_table(grid, OUT / "decodage_grille_validation")
+    ev.save_table(per_class_grid(validation["labels"]), OUT / "decodage_grille_validation_par_classe")
     harmonised = {
         split: {s: decoders()[s](load_scores(s, split), chosen[s]) for s in chosen}
         for split in ["validation", "test"]
@@ -458,7 +473,7 @@ def _run_analysis() -> dict:
     m_h.to_csv(OUT / "confusion_transformer_harmonise.csv")
     ev.plot_confusion_matrices(
         {"Transformer (tel que livré)": matrices["Transformer"],
-         f"Transformer, décodage harmonisé (seuil {grid_label(chosen['transformer'])})": m_h},
+         f"Transformer, décodage harmonisé (seuil {grid_label(chosen['transformer']).replace('.', ',')})": m_h},
         OUT / "matrices_confusion_transformer_harmonise.png")
 
     # 6. Loss curves.
@@ -551,8 +566,30 @@ def _run_analysis() -> dict:
     f1_large = {row["name"]: float(per_class[row["key"]].set_index("genre").drop(SMALL_CLASSES)["f1"].mean())
                 for row in rows["test"]}
     checks = read_json(OUT / "checks.json")
+    baseline_config = read_json(RESULTS / "baseline" / "config.json")
+    # Delivered metrics recomputed with the common functions (expected gap: 0).
+    gaps = {}
+    for system in NAMES:
+        delivered_file = pd.read_csv(RESULTS / system / "test_predictions.csv")
+        mine = ev.evaluate(test["labels"], delivered_file["predicted_label"].map(ev.parse_labels))
+        theirs = read_json(RESULTS / system / "test_metrics.json")
+        gaps[system] = max(abs(mine[m] - theirs[m]) for m in
+                           ["accuracy", "precision_macro", "recall_macro", "f1_macro", "f1_micro"])
     key = {
+        "delivered_metrics_max_gap": gaps,
         "data": data_numbers(),
+        "delivered_configs": {
+            "baseline": {k: baseline_config[k] for k in
+                         ["strong_weight", "weak_weight", "extra_label_ratio", "default_label"]},
+            "deep_learning": {k: dl_config[k] for k in
+                              ["max_features", "min_df", "hidden_dim", "dropout", "learning_rate",
+                               "weight_decay", "batch_size", "epochs", "patience",
+                               "extra_label_threshold", "train_time_seconds", "best_val_f1_macro"]}
+                             | {"epochs_run": len(dl_config["train_loss"]), "best_epoch": dl_best},
+            "transformer": {k: v for k, v in read_json(RESULTS / "transformer" / "config.json").items()
+                            if k not in ("labels", "validation_metrics")}
+                           | {"best_epoch": tr_best},
+        },
         "test_size": len(test),
         "validation_size": len(validation),
         "train_size": len(split_data("train")),
