@@ -60,7 +60,8 @@ Système retenu : le Deep Learning. La justification est dans rapport.pdf, secti
   results/                 sorties des systèmes (modèles non versionnés)
     evaluation/            tableaux (CSV et Markdown), figures (PNG), scores sauvegardés,
                            erreurs.md, notes_equipe.md, key_numbers.json (versionné)
-  report/                  génération du rapport : build_report.py et gabarit HTML
+  report/latex/            source LaTeX du rapport : rapport.tex et images/ (figures
+                           copiées depuis results/evaluation/)
   rapport.pdf              rapport final
   pyproject.toml, uv.lock  dépendances
 
@@ -133,10 +134,12 @@ c) Évaluation commune
    analysis.py ne lit que results/evaluation/.
 
 d) Rapport
-     uv run python report/build_report.py
-   Ce script écrit report/rapport.html, puis rapport.pdf via Google Chrome en mode
-   headless. Il vérifie aussi que le corps du rapport ne dépasse pas 4 pages. Tous les
-   chiffres sont lus dans results/evaluation/.
+   La source est report/latex/rapport.tex. Pour la compiler, deux possibilités :
+     - Overleaf : importer le dossier report/latex/ (compilateur pdfLaTeX) ;
+     - en local : cd report/latex && tectonic rapport.tex (ou pdflatex, lancé deux fois).
+   Copier ensuite report/latex/rapport.pdf à la racine du dépôt. Le corps du rapport
+   (de l'introduction à la conclusion) doit rester sur 4 pages au plus. Tous les
+   chiffres viennent des fichiers de results/evaluation/.
 
 
 6. Les trois approches
