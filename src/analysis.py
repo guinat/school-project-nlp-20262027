@@ -372,6 +372,17 @@ def errors_markdown(records: pd.DataFrame, candidates: dict) -> str:
 
 # Main
 def run_analysis() -> dict:
+    """Same figures from the command line and from a notebook: the inline
+    backend changes some rcParams, so they are reset to matplotlib defaults."""
+    import matplotlib.pyplot as plt
+
+    with plt.style.context("default"):
+        key = _run_analysis()
+    plt.close("all")  # figures are saved; do not echo them in a notebook
+    return key
+
+
+def _run_analysis() -> dict:
     OUT.mkdir(parents=True, exist_ok=True)
     validation, test = split_data("validation"), split_data("test")
     probs = {s: load_scores(s, "test") for s in ["deep_learning", "transformer"]}
@@ -567,10 +578,12 @@ def run_analysis() -> dict:
         "checks": checks,
     }
     write_json(key, OUT / "key_numbers.json")
-
-    print(ev.to_markdown(ev.format_table(ev.comparison_table(rows["test"]))))
     return key
 
 
 if __name__ == "__main__":
-    print(json.dumps(run_analysis(), indent=2, ensure_ascii=False, default=float))
+    import matplotlib
+
+    matplotlib.use("Agg")  # also when launched from a notebook (MPLBACKEND=inline)
+    run_analysis()
+    print((OUT / "tableau_final_test_lisible.md").read_text(encoding="utf-8"))
