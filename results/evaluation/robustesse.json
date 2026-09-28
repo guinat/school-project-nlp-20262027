@@ -1,0 +1,116 @@
+{
+  "bootstrap_f1_macro_test": {
+    "Baseline": {
+      "f1_macro": 0.46395904037877866,
+      "ci_low": 0.41383584526386297,
+      "ci_high": 0.5069332499086903,
+      "n_boot": 1000,
+      "seed": 42
+    },
+    "Deep Learning": {
+      "f1_macro": 0.7300323764587342,
+      "ci_low": 0.6687372531781757,
+      "ci_high": 0.7768944728255144,
+      "n_boot": 1000,
+      "seed": 42
+    },
+    "Transformer": {
+      "f1_macro": 0.6535692343032684,
+      "ci_low": 0.5963879477464649,
+      "ci_high": 0.6959429132672394,
+      "n_boot": 1000,
+      "seed": 42
+    },
+    "Baseline, décodage harmonisé (seuil top-1 seul)": {
+      "f1_macro": 0.4490323525668313,
+      "ci_low": 0.39469095588171965,
+      "ci_high": 0.4947732068501601,
+      "n_boot": 1000,
+      "seed": 42
+    },
+    "Deep Learning, décodage harmonisé (seuil 0.6)": {
+      "f1_macro": 0.7185321692152636,
+      "ci_low": 0.6570505677583236,
+      "ci_high": 0.7664704525022471,
+      "n_boot": 1000,
+      "seed": 42
+    },
+    "Transformer, décodage harmonisé (seuil 0.2)": {
+      "f1_macro": 0.7318923533173316,
+      "ci_low": 0.6775807390896632,
+      "ci_high": 0.7732796149043693,
+      "n_boot": 1000,
+      "seed": 42
+    }
+  },
+  "paired": {
+    "deep_learning vs transformer": {
+      "f1_macro_difference": {
+        "difference": 0.07646314215546579,
+        "ci_low": 0.015316373340649411,
+        "ci_high": 0.1345904347734895,
+        "share_a_better": 0.996,
+        "n_boot": 1000,
+        "seed": 42
+      },
+      "mcnemar_exact_match": {
+        "both_right": 279,
+        "only_a_right": 77,
+        "only_b_right": 51,
+        "both_wrong": 101,
+        "p_value_exact": 0.026735172855975448
+      }
+    },
+    "deep_learning vs transformer_harmonise": {
+      "f1_macro_difference": {
+        "difference": -0.0018599768585974008,
+        "ci_low": -0.060470681485985056,
+        "ci_high": 0.05736812839987285,
+        "share_a_better": 0.489,
+        "n_boot": 1000,
+        "seed": 42
+      },
+      "mcnemar_exact_match": {
+        "both_right": 248,
+        "only_a_right": 108,
+        "only_b_right": 48,
+        "both_wrong": 104,
+        "p_value_exact": 1.7480260886077413e-06
+      }
+    },
+    "transformer_harmonise vs transformer": {
+      "f1_macro_difference": {
+        "difference": 0.07832311901406319,
+        "ci_low": 0.03370775834317736,
+        "ci_high": 0.12420446660814215,
+        "share_a_better": 1.0,
+        "n_boot": 1000,
+        "seed": 42
+      },
+      "mcnemar_exact_match": {
+        "both_right": 277,
+        "only_a_right": 19,
+        "only_b_right": 53,
+        "both_wrong": 159,
+        "p_value_exact": 7.555811484431396e-05
+      }
+    },
+    "deep_learning vs baseline": {
+      "f1_macro_difference": {
+        "difference": 0.26607333607995554,
+        "ci_low": 0.2029499771161267,
+        "ci_high": 0.3308442178072455,
+        "share_a_better": 1.0,
+        "n_boot": 1000,
+        "seed": 42
+      },
+      "mcnemar_exact_match": {
+        "both_right": 176,
+        "only_a_right": 180,
+        "only_b_right": 35,
+        "both_wrong": 117,
+        "p_value_exact": 1.0502877094043404e-24
+      }
+    }
+  }
+}

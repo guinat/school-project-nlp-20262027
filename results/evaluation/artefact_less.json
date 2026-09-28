@@ -1,0 +1,60 @@
+{
+  "train_share_with_less_by_genre": {
+    "crime": 0.0,
+    "fantasy": 0.4283646888567294,
+    "history": 0.0,
+    "horror": 0.16701902748414377,
+    "psychology": 0.0,
+    "romance": 1.0,
+    "science": 0.068762278978389,
+    "sports": 0.9850746268656716,
+    "thriller": 0.5018587360594795,
+    "travel": 0.0
+  },
+  "test_with_less": 131,
+  "transformer_delivered": {
+    "accuracy": 0.6496062992125984,
+    "precision_macro": 0.7537227186876382,
+    "recall_macro": 0.5842837921107046,
+    "f1_macro": 0.6535692343032684,
+    "f1_micro": 0.7176220806794055,
+    "n_examples": 508,
+    "n_empty_predictions": 83,
+    "n_multi_predictions": 3,
+    "labels_per_example": 0.84251968503937
+  },
+  "transformer_delivered_without_less": {
+    "accuracy": 0.639763779527559,
+    "precision_macro": 0.7453040640877225,
+    "recall_macro": 0.5816854401702475,
+    "f1_macro": 0.6484583987936433,
+    "f1_micro": 0.7077577045696068,
+    "n_examples": 508,
+    "n_empty_predictions": 85,
+    "n_multi_predictions": 4,
+    "labels_per_example": 0.8405511811023622
+  },
+  "transformer_harmonised": {
+    "accuracy": 0.5826771653543307,
+    "precision_macro": 0.6966536448537315,
+    "recall_macro": 0.7828927109244527,
+    "f1_macro": 0.7318923533173316,
+    "f1_micro": 0.7213114754098361,
+    "n_examples": 508,
+    "n_empty_predictions": 0,
+    "n_multi_predictions": 134,
+    "labels_per_example": 1.2696850393700787
+  },
+  "transformer_harmonised_without_less": {
+    "accuracy": 0.5688976377952756,
+    "precision_macro": 0.6793819898435517,
+    "recall_macro": 0.774958101674054,
+    "f1_macro": 0.7165545005937985,
+    "f1_micro": 0.7135506003430532,
+    "n_examples": 508,
+    "n_empty_predictions": 0,
+    "n_multi_predictions": 142,
+    "labels_per_example": 1.2834645669291338
+  },
+  "transformer_changed_predictions": 15
+}

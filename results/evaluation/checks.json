@@ -1,0 +1,16 @@
+{
+  "baseline_validation_rerun_identical": 1.0,
+  "baseline_validation_rerun_same_order": 1.0,
+  "baseline_validation_decode_from_scores_identical": 1.0,
+  "baseline_validation_no_rule_fired": 13,
+  "baseline_test_rerun_identical": 1.0,
+  "baseline_test_rerun_same_order": 1.0,
+  "baseline_test_decode_from_scores_identical": 1.0,
+  "baseline_test_no_rule_fired": 15,
+  "transformer_test_fp32_cpu_identical_to_delivered": 1.0,
+  "transformer_validation_accuracy_delivered_config": 0.6554809843400448,
+  "transformer_validation_accuracy_recomputed": 0.6554809843400448,
+  "transformer_test_truncated_share": 0.47834645669291337,
+  "transformer_test_median_tokens": 245.0,
+  "deep_learning_test_reload_identical": 1.0
+}

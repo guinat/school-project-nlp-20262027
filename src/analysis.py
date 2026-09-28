@@ -45,6 +45,40 @@ def grid_label(value) -> str:
     return "top-1 seul" if np.isinf(value) else f"{value:.1f}"
 
 
+def data_numbers() -> dict:
+    """Facts about the data, read from the processed files (and, for the raw
+    size, from the saved output of notebooks/cleaning.ipynb)."""
+    import re
+
+    root = OUT.parents[1]
+    notebook = json.loads((root / "notebooks" / "cleaning.ipynb").read_text(encoding="utf-8"))
+    raw_rows = None
+    for cell in notebook["cells"]:
+        if "df.shape" in "".join(cell["source"]) and "Dimensions" in "".join(cell["source"]):
+            for output in cell.get("outputs", []):
+                text = "".join(output.get("data", {}).get("text/plain", ""))
+                match = re.match(r"\((\d+), \d+\)", text)
+                if match:
+                    raw_rows = int(match.group(1))
+    clean = pd.read_csv(root / "data" / "processed" / "data_clean.csv")
+    splits = {s: split_data(s) for s in ["train", "validation", "test"]}
+    words = pd.concat([d["text"] for d in splits.values()]).str.split().str.len()
+    return {
+        "raw_rows_cleaning_notebook": raw_rows,
+        "clean_rows": int(len(clean)),
+        "split_sizes": {s: int(len(d)) for s, d in splits.items()},
+        "split_shares": {s: float(len(d) / len(clean)) for s, d in splits.items()},
+        "multi_label": {s: int(sum(len(t) > 1 for t in d["labels"])) for s, d in splits.items()},
+        "support": {s: {g: int(sum(g in t for t in d["labels"])) for g in LABELS}
+                    for s, d in splits.items()},
+        "words_median": float(words.median()),
+        "words_min": int(words.min()),
+        "words_max": int(words.max()),
+        "with_less_artifact": {s: int(d["text"].str.contains(LESS_ARTIFACT).sum())
+                               for s, d in splits.items()},
+    }
+
+
 # Predictions
 def delivered_thresholds() -> dict:
     """Decoding parameters as delivered, read from each system's config."""
@@ -507,6 +541,7 @@ def run_analysis() -> dict:
                 for row in rows["test"]}
     checks = read_json(OUT / "checks.json")
     key = {
+        "data": data_numbers(),
         "test_size": len(test),
         "validation_size": len(validation),
         "train_size": len(split_data("train")),
