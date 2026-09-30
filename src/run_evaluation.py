@@ -9,11 +9,15 @@ Stage "systems" (slow, ~2 min, needs the saved models):
     retraining;
   - inference timing under the same conditions for the three systems.
 Stage "analysis" (fast, only reads results/evaluation/): tables, figures,
-decoding study on validation, bootstrap, McNemar, error selection.
+bootstrap, McNemar, error selection.
+Stage "history" (optional, ~10 s, needs git): retrains the first version of the
+deep learning model, which used an independent 0.5 threshold, to document why
+its decoding rule was changed.
 
 Usage:
-  .venv/bin/python src/run_evaluation.py              # both stages
+  .venv/bin/python src/run_evaluation.py              # systems + analysis
   .venv/bin/python src/run_evaluation.py --stage analysis
+  .venv/bin/python src/run_evaluation.py --stage history
 """
 
 import argparse
@@ -51,8 +55,6 @@ SYSTEMS = {
 INFERENCE_BATCH_SIZE = 32
 # Goodreads "show less" button left in the summaries by the scraping.
 LESS_ARTIFACT = re.compile(r"\s*\(less\)")
-# Decoding grid, chosen before looking at any result. np.inf = top-1 only.
-THRESHOLD_GRID = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, np.inf]
 
 
 def split_data(split: str) -> pd.DataFrame:
@@ -329,15 +331,60 @@ def run_systems(retrain_runs: int = 2, timing: bool = True) -> None:
     print(json.dumps(log, indent=2))
 
 
+# First version of src/deep_learning.py: independent 0.5 threshold per genre,
+# used both for early stopping and for the answers. Replaced in 8e5e5a8.
+FIRST_DL_COMMIT = "5cd4b7b"
+
+
+def run_dl_history() -> None:
+    """Retrain the first version of the DL model to document why its decoding
+    rule was changed. The code is read from git history and trained in memory:
+    nothing is written in results/deep_learning/."""
+    import importlib.util
+    import subprocess
+    import tempfile
+
+    source = subprocess.run(
+        ["git", "show", f"{FIRST_DL_COMMIT}:src/deep_learning.py"],
+        cwd=ROOT, capture_output=True, text=True, check=True).stdout
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "deep_learning_v1.py"
+        path.write_text(source, encoding="utf-8")
+        spec = importlib.util.spec_from_file_location("deep_learning_v1", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        model = module.train(DATA / "train.csv", DATA / "validation.csv")
+
+    validation = split_data("validation")
+    probabilities = dl_probabilities(model, validation["text"])
+    first = ev.evaluate(validation["labels"], ev.decode_independent(probabilities, 0.5))
+    n = first["n_examples"]
+    write_json({
+        "commit": FIRST_DL_COMMIT,
+        "rule": "un genre des que sa probabilite atteint 0,5 (regle independante)",
+        "device": model.device,
+        "best_epoch": int(np.argmax([m["f1_macro"] for m in
+                                     model.history["validation_metrics"]]) + 1),
+        "epochs_run": len(model.history["train_loss"]),
+        "validation": first,
+        "validation_empty_share": first["n_empty_predictions"] / n,
+        "validation_multi_share": first["n_multi_predictions"] / n,
+        "validation_true_multi_share": float(np.mean([len(t) > 1 for t in validation["labels"]])),
+    }, OUT / "dl_premiere_version.json")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--stage", choices=["systems", "analysis", "all"], default="all")
+    parser.add_argument("--stage", choices=["systems", "analysis", "history", "all"],
+                        default="all")
     parser.add_argument("--retrain-runs", type=int, default=2)
     parser.add_argument("--skip-timing", action="store_true")
     args = parser.parse_args()
     start = time.perf_counter()
     if args.stage in ("systems", "all"):
         run_systems(args.retrain_runs, timing=not args.skip_timing)
+    if args.stage == "history":
+        run_dl_history()
     if args.stage in ("analysis", "all"):
         from analysis import run_analysis
 

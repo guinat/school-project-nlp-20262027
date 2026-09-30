@@ -3,6 +3,3 @@
 | Baseline | 0.415 | 0.426 | 0.613 | 0.464 | 0 s | 1.15 ms/ex. |
 | Deep Learning | 0.701 | 0.764 | 0.707 | 0.730 | 2.9 s | 0.12 ms/ex. |
 | Transformer | 0.650 | 0.754 | 0.584 | 0.654 | 451.5 s | 10.27 ms/ex. |
-| Baseline, décodage harmonisé (seuil top-1 seul) | 0.455 | 0.452 | 0.559 | 0.449 | 0 s | 1.15 ms/ex. |
-| Deep Learning, décodage harmonisé (seuil 0.6) | 0.671 | 0.725 | 0.719 | 0.719 | 2.9 s | 0.12 ms/ex. |
-| Transformer, décodage harmonisé (seuil 0.2) | 0.583 | 0.697 | 0.783 | 0.732 | 451.5 s | 10.27 ms/ex. |

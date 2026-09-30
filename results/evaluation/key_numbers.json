@@ -128,11 +128,6 @@
     "deep_learning": 0.8,
     "transformer": 0.5
   },
-  "decoding_chosen_on_validation": {
-    "baseline": "top-1 seul",
-    "deep_learning": "0.6",
-    "transformer": "0.2"
-  },
   "transformer_empty_test": 83,
   "transformer_empty_test_argmax_right": 41,
   "transformer_empty_test_dl_right": 42,
@@ -144,18 +139,12 @@
   "f1_mean_small_classes": {
     "Baseline": 0.4199229736520389,
     "Deep Learning": 0.7647340275823247,
-    "Transformer": 0.5606811145510836,
-    "Baseline, décodage harmonisé (seuil top-1 seul)": 0.41352434381887393,
-    "Deep Learning, décodage harmonisé (seuil 0.6)": 0.7300918391071844,
-    "Transformer, décodage harmonisé (seuil 0.2)": 0.7480633401686033
+    "Transformer": 0.5606811145510836
   },
   "f1_mean_large_classes": {
     "Baseline": 0.4933164181966052,
     "Deep Learning": 0.7068979423763403,
-    "Transformer": 0.7154946474713917,
-    "Baseline, décodage harmonisé (seuil top-1 seul)": 0.4727043583988028,
-    "Deep Learning, décodage harmonisé (seuil 0.6)": 0.7108257226206499,
-    "Transformer, décodage harmonisé (seuil 0.2)": 0.7211116954164839
+    "Transformer": 0.7154946474713917
   },
   "baseline_no_rule_fired_test": 15,
   "transformer_test_truncated_share": 0.47834645669291337,
@@ -205,28 +194,6 @@
       "n_empty_predictions": 85,
       "n_multi_predictions": 4,
       "labels_per_example": 0.8405511811023622
-    },
-    "transformer_harmonised": {
-      "accuracy": 0.5826771653543307,
-      "precision_macro": 0.6966536448537315,
-      "recall_macro": 0.7828927109244527,
-      "f1_macro": 0.7318923533173316,
-      "f1_micro": 0.7213114754098361,
-      "n_examples": 508,
-      "n_empty_predictions": 0,
-      "n_multi_predictions": 134,
-      "labels_per_example": 1.2696850393700787
-    },
-    "transformer_harmonised_without_less": {
-      "accuracy": 0.5688976377952756,
-      "precision_macro": 0.6793819898435517,
-      "recall_macro": 0.774958101674054,
-      "f1_macro": 0.7165545005937985,
-      "f1_micro": 0.7135506003430532,
-      "n_examples": 508,
-      "n_empty_predictions": 0,
-      "n_multi_predictions": 142,
-      "labels_per_example": 1.2834645669291338
     },
     "transformer_changed_predictions": 15
   },

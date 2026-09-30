@@ -7,10 +7,8 @@ results/evaluation/: tables (CSV + Markdown), figures (PNG), erreurs.md and
 key_numbers.json, the single source of every number quoted in the report.
 
 Protocol reminders:
-- the test set is only scored; every choice (decoding threshold) is made on
-  validation, then applied once to test;
-- the "tel que livré" rows are never modified; the harmonised decoding is an
-  additional analysis, reported as extra rows.
+- the test set is only scored: every choice was made on validation;
+- each system is evaluated with its decoding rule as delivered.
 """
 
 import json
@@ -24,7 +22,6 @@ from run_evaluation import (
     LESS_ARTIFACT,
     OUT,
     RESULTS,
-    THRESHOLD_GRID,
     baseline_decode,
     load_scores,
     read_json,
@@ -39,10 +36,6 @@ NAMES = {
     "transformer": "Transformer",
 }
 N_BOOT = 1000
-
-
-def grid_label(value) -> str:
-    return "top-1 seul" if np.isinf(value) else f"{value:.1f}"
 
 
 def data_numbers() -> dict:
@@ -89,20 +82,6 @@ def delivered_thresholds() -> dict:
     }
 
 
-def decoders() -> dict:
-    """Harmonised rule for each system: top-1 + every genre above a threshold.
-
-    For the networks the threshold applies to probabilities. The baseline has
-    no probabilities: its threshold is the ratio to the best score, which is
-    exactly its own rule (score >= ratio x best).
-    """
-    return {
-        "baseline": baseline_decode,
-        "deep_learning": ev.decode_top_threshold,
-        "transformer": ev.decode_top_threshold,
-    }
-
-
 def delivered_predictions(split: str) -> dict:
     thresholds = delivered_thresholds()
     return {
@@ -124,35 +103,6 @@ def check_against_delivered_files(predictions: dict) -> None:
             raise AssertionError(f"{system}: {len(same) - sum(same)} predictions differ")
 
 
-def per_class_grid(validation_truth) -> pd.DataFrame:
-    """F1 of each genre on validation for each threshold of the grid: shows
-    which genres drive the choice of the threshold."""
-    rows = []
-    for system, decode in decoders().items():
-        scores = load_scores(system, "validation")
-        for value in THRESHOLD_GRID:
-            report = ev.per_class_report(validation_truth, decode(scores, value))
-            for genre, f1 in zip(report["genre"], report["f1"]):
-                rows.append({"système": NAMES[system], "threshold": grid_label(value),
-                             "genre": genre, "f1": f1})
-    return pd.DataFrame(rows)
-
-
-def select_decoding(validation_truth) -> tuple[dict, pd.DataFrame]:
-    """Choose the threshold of each system on validation only."""
-    chosen, tables = {}, []
-    for system, decode in decoders().items():
-        scores = load_scores(system, "validation")
-        best, table = ev.select_threshold(
-            validation_truth, lambda t: decode(scores, t), THRESHOLD_GRID)
-        chosen[system] = float(best)
-        table.insert(0, "système", NAMES[system])
-        tables.append(table)
-    grid = pd.concat(tables, ignore_index=True)
-    grid["threshold"] = grid["threshold"].map(grid_label)
-    return chosen, grid
-
-
 # Tables
 def train_seconds() -> dict:
     retrain = read_json(OUT / "dl_reproducibility.json")
@@ -168,24 +118,14 @@ def inference_ms(device: str = "cpu") -> dict:
     return {t["system"]: t["ms_per_example"] for t in timing if t["device"] == device}
 
 
-def build_rows(truth, delivered: dict, harmonised: dict, chosen: dict,
-               extra_rows: list) -> list:
+def build_rows(truth, delivered: dict) -> list:
     train, infer = train_seconds(), inference_ms("cpu")
-    rows = [
+    return [
         {"key": system, "name": NAMES[system], "metrics": ev.evaluate(truth, preds),
          "train_seconds": train[system], "inference_ms": infer[system],
          "predictions": preds}
         for system, preds in delivered.items()
     ]
-    for system in extra_rows:
-        rows.append({
-            "key": f"{system}_harmonise",
-            "name": f"{NAMES[system]}, décodage harmonisé (seuil {grid_label(chosen[system])})",
-            "metrics": ev.evaluate(truth, harmonised[system]),
-            "train_seconds": train[system], "inference_ms": infer[system],
-            "predictions": harmonised[system],
-        })
-    return rows
 
 
 def detail_table(rows: list) -> pd.DataFrame:
@@ -329,7 +269,7 @@ def explain_baseline(text: str) -> str:
     return "; ".join(parts)
 
 
-def error_records(selection, test, preds, probs, harmonised) -> pd.DataFrame:
+def error_records(selection, test, preds, probs) -> pd.DataFrame:
     records = []
     for criterion, i in selection:
         text = test["text"].iloc[i]
@@ -342,7 +282,6 @@ def error_records(selection, test, preds, probs, harmonised) -> pd.DataFrame:
             "baseline": ", ".join(preds["baseline"][i]) or "(aucun)",
             "deep_learning": ", ".join(preds["deep_learning"][i]) or "(aucun)",
             "transformer": ", ".join(preds["transformer"][i]) or "(aucun)",
-            "transformer_harmonise": ", ".join(harmonised[i]),
             "proba_dl": fmt_probs(probs["deep_learning"][i]),
             "proba_transformer": fmt_probs(probs["transformer"][i]),
             "baseline_explain": explain_baseline(text),
@@ -377,7 +316,6 @@ def errors_markdown(records: pd.DataFrame, candidates: dict) -> str:
             f"- Baseline : {row.baseline} — mots-clés : {row.baseline_explain}",
             f"- Deep Learning : {row.deep_learning} — probabilités : {row.proba_dl}",
             f"- Transformer : {row.transformer} — probabilités : {row.proba_transformer}",
-            f"- Transformer, décodage harmonisé : {row.transformer_harmonise}",
             f"- **Hypothèse** : {row.hypothèse}",
             "",
         ]
@@ -406,30 +344,18 @@ def _run_analysis() -> dict:
     delivered = {split: delivered_predictions(split) for split in ["validation", "test"]}
     check_against_delivered_files(delivered["test"])
 
-    # 1. Harmonised decoding: threshold chosen on validation, applied once to test.
-    chosen, grid = select_decoding(validation["labels"])
-    ev.save_table(grid, OUT / "decodage_grille_validation")
-    ev.save_table(per_class_grid(validation["labels"]), OUT / "decodage_grille_validation_par_classe")
-    harmonised = {
-        split: {s: decoders()[s](load_scores(s, split), chosen[s]) for s in chosen}
-        for split in ["validation", "test"]
-    }
     thresholds = delivered_thresholds()
-    # A harmonised row is shown only if it changes the delivered decoding.
-    extra = [s for s in chosen
-             if s == "transformer" or not np.isclose(chosen[s], thresholds[s])]
 
-    # 2. Final tables, validation and test.
+    # 1. Final tables, validation and test.
     rows = {}
     for split, data in [("validation", validation), ("test", test)]:
-        rows[split] = build_rows(data["labels"], delivered[split], harmonised[split],
-                                 chosen, extra)
+        rows[split] = build_rows(data["labels"], delivered[split])
         table = ev.comparison_table(rows[split])
         ev.save_table(table, OUT / f"tableau_final_{split}")
         ev.save_table(ev.format_table(table), OUT / f"tableau_final_{split}_lisible")
         ev.save_table(detail_table(rows[split]), OUT / f"metriques_detail_{split}")
 
-    # 3. Timing and cost table.
+    # 2. Timing and cost table.
     timing = read_json(OUT / "timing.json")
     costs = read_json(OUT / "costs.json")
     train = train_seconds()
@@ -447,7 +373,7 @@ def _run_analysis() -> dict:
         })
     ev.save_table(pd.DataFrame(cost_rows), OUT / "couts_temps")
 
-    # 4. Per-class F1 and one-vs-rest counts.
+    # 3. Per-class F1 and one-vs-rest counts.
     per_class = {row["key"]: ev.per_class_report(test["labels"], row["predictions"])
                  for row in rows["test"]}
     wide = per_class["baseline"][["genre", "support"]].copy()
@@ -456,27 +382,18 @@ def _run_analysis() -> dict:
     ev.save_table(wide, OUT / "f1_par_classe_test")
     long = pd.concat([df.assign(système=key) for key, df in per_class.items()])
     ev.save_table(long, OUT / "rapport_par_classe_test")
-    plot_keys = ["baseline", "deep_learning", "transformer", "transformer_harmonise"]
-    ev.plot_per_class_f1(
-        {("Transformer harmonisé" if k.endswith("harmonise") else NAMES[k]): per_class[k]
-         for k in plot_keys},
-        OUT / "f1_par_classe_test.png")
+    ev.plot_per_class_f1({NAMES[k]: per_class[k] for k in NAMES},
+                         OUT / "f1_par_classe_test.png")
 
-    # 5. Confusion matrices (single-label test examples, top-1 from scores).
+    # 4. Confusion matrices (single-label test examples, top-1 from scores).
     matrices = {}
     for system in NAMES:
         m = ev.confusion_matrix(test["labels"], delivered["test"][system], score_of[system])
         m.to_csv(OUT / f"confusion_{system}.csv")
         matrices[NAMES[system]] = m
     ev.plot_confusion_matrices(matrices, OUT / "matrices_confusion.png")
-    m_h = ev.confusion_matrix(test["labels"], harmonised["test"]["transformer"], probs["transformer"])
-    m_h.to_csv(OUT / "confusion_transformer_harmonise.csv")
-    ev.plot_confusion_matrices(
-        {"Transformer (tel que livré)": matrices["Transformer"],
-         f"Transformer, décodage harmonisé (seuil {grid_label(chosen['transformer']).replace('.', ',')})": m_h},
-        OUT / "matrices_confusion_transformer_harmonise.png")
 
-    # 6. Loss curves.
+    # 5. Loss curves.
     dl_config = read_json(RESULTS / "deep_learning" / "config.json")
     dl_best = int(np.argmax([m["f1_macro"] for m in dl_config["validation_metrics"]]) + 1)
     last_checkpoint = max((RESULTS / "transformer").glob("checkpoint-*"),
@@ -503,16 +420,13 @@ def _run_analysis() -> dict:
     ev.plot_loss_curves(curves, OUT / "courbes_loss.png")
     write_json(curves, OUT / "courbes_loss.json")
 
-    # 7. Robustness: bootstrap CI and McNemar.
+    # 6. Robustness: bootstrap CI and McNemar.
     robustness = {"bootstrap_f1_macro_test": {}, "paired": {}}
     for row in rows["test"]:
         robustness["bootstrap_f1_macro_test"][row["name"]] = ev.bootstrap_f1_macro(
             test["labels"], row["predictions"], n_boot=N_BOOT)
     by_key = {row["key"]: row["predictions"] for row in rows["test"]}
-    for a, b in [("deep_learning", "transformer"),
-                 ("deep_learning", "transformer_harmonise"),
-                 ("transformer_harmonise", "transformer"),
-                 ("deep_learning", "baseline")]:
+    for a, b in [("deep_learning", "transformer"), ("deep_learning", "baseline")]:
         robustness["paired"][f"{a} vs {b}"] = {
             "f1_macro_difference": ev.paired_bootstrap_difference(
                 test["labels"], by_key[a], by_key[b], n_boot=N_BOOT),
@@ -525,16 +439,15 @@ def _run_analysis() -> dict:
         for name, r in robustness["bootstrap_f1_macro_test"].items()])
     ev.save_table(boot, OUT / "bootstrap_f1_macro_test")
 
-    # 8. Error analysis.
+    # 7. Error analysis.
     bets = {s: ev.top1(delivered["test"][s], score_of[s]) for s in NAMES}
     candidates = error_candidates(test["labels"], delivered["test"], bets, probs)
     selection = select_errors(candidates)
-    records = error_records(selection, test, delivered["test"], probs,
-                            harmonised["test"]["transformer"])
+    records = error_records(selection, test, delivered["test"], probs)
     records.to_csv(OUT / "erreurs.csv", index=False)
     (OUT / "erreurs.md").write_text(errors_markdown(records, candidates), encoding="utf-8")
 
-    # 9. Scraping artifact "(less)": share per genre (train) and effect on the
+    # 8. Scraping artifact "(less)": share per genre (train) and effect on the
     # transformer when it is removed from the test summaries.
     train = split_data("train")
     has_less = train["text"].str.contains(LESS_ARTIFACT)
@@ -546,16 +459,13 @@ def _run_analysis() -> dict:
         "transformer_delivered": ev.evaluate(test["labels"], delivered["test"]["transformer"]),
         "transformer_delivered_without_less": ev.evaluate(test["labels"], ev.decode_independent(
             cleaned, thresholds["transformer"])),
-        "transformer_harmonised": ev.evaluate(test["labels"], harmonised["test"]["transformer"]),
-        "transformer_harmonised_without_less": ev.evaluate(test["labels"], ev.decode_top_threshold(
-            cleaned, chosen["transformer"])),
         "transformer_changed_predictions": int(sum(
             set(a) != set(b) for a, b in zip(delivered["test"]["transformer"],
                                              ev.decode_independent(cleaned, thresholds["transformer"])))),
     }
     write_json(artifact, OUT / "artefact_less.json")
 
-    # 10. Key numbers quoted in the report.
+    # 9. Key numbers quoted in the report.
     empty = np.array([len(p) == 0 for p in delivered["test"]["transformer"]])
     argmax_right = np.array([
         LABELS[int(np.argmax(probs["transformer"][i]))] in test["labels"].iloc[i]
@@ -596,7 +506,6 @@ def _run_analysis() -> dict:
         "test_multi_label": int(sum(len(t) > 1 for t in test["labels"])),
         "test_support": {g: int(sum(g in t for t in test["labels"])) for g in LABELS},
         "decoding_delivered": thresholds,
-        "decoding_chosen_on_validation": {s: grid_label(v) for s, v in chosen.items()},
         "transformer_empty_test": int(empty.sum()),
         "transformer_empty_test_argmax_right": int((empty & argmax_right).sum()),
         "transformer_empty_test_dl_right": int((empty & right["deep_learning"]).sum()),
