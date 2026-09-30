@@ -1,0 +1,69 @@
+{
+  "machine": "macOS-26.2-arm64-arm-64bit",
+  "processor": "arm",
+  "torch": "2.14.0",
+  "torch_threads": 8,
+  "protocol": "508 test summaries, 1 warm-up call on 32 texts (not timed), 3 timed passes, median reported; end-to-end: raw text -> genres",
+  "timings": [
+    {
+      "system": "baseline",
+      "device": "cpu",
+      "batch_size": 1,
+      "warmup_examples": 32,
+      "n_repeats": 3,
+      "n_examples": 508,
+      "total_seconds_median": 0.5839227079995908,
+      "total_seconds_min": 0.5796509160009009,
+      "total_seconds_max": 0.5925669159987592,
+      "ms_per_example": 1.1494541496054935
+    },
+    {
+      "system": "deep_learning",
+      "device": "cpu",
+      "batch_size": 32,
+      "warmup_examples": 32,
+      "n_repeats": 3,
+      "n_examples": 508,
+      "total_seconds_median": 0.06148458300049242,
+      "total_seconds_min": 0.06125216700093006,
+      "total_seconds_max": 0.06198983399917779,
+      "ms_per_example": 0.12103264370175673
+    },
+    {
+      "system": "transformer",
+      "device": "cpu",
+      "batch_size": 32,
+      "warmup_examples": 32,
+      "n_repeats": 3,
+      "n_examples": 508,
+      "total_seconds_median": 5.216429457999766,
+      "total_seconds_min": 5.205871125001067,
+      "total_seconds_max": 5.228325166001014,
+      "ms_per_example": 10.268561925196389
+    },
+    {
+      "system": "deep_learning",
+      "device": "mps",
+      "batch_size": 32,
+      "warmup_examples": 32,
+      "n_repeats": 3,
+      "n_examples": 508,
+      "total_seconds_median": 0.07482470800096053,
+      "total_seconds_min": 0.07281654199869081,
+      "total_seconds_max": 0.07611483400069119,
+      "ms_per_example": 0.14729273228535536
+    },
+    {
+      "system": "transformer",
+      "device": "mps",
+      "batch_size": 32,
+      "warmup_examples": 32,
+      "n_repeats": 3,
+      "n_examples": 508,
+      "total_seconds_median": 2.855347124999753,
+      "total_seconds_min": 2.8536657500008005,
+      "total_seconds_max": 2.858830499999385,
+      "ms_per_example": 5.620762057086128
+    }
+  ]
+}

@@ -1,0 +1,595 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{graphicx}
+\usepackage{tocloft}
+\usepackage[french]{babel}
+\usepackage{fancyhdr}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage[section]{placeins} % les tableaux restent dans leur section
+\usepackage{xcolor}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true, linkcolor=blue!50!black, urlcolor=blue!50!black}
+
+% Configuration de la géométrie de la page.
+% Marges de 2 cm : le sujet impose 4 pages maximum hors annexes.
+\geometry{a4paper, margin=2cm}
+
+% Configuration des en-têtes et pieds de page
+\pagestyle{fancy}
+\fancyhf{} % Efface en-têtes et pieds existants
+\renewcommand{\headrulewidth}{0pt}
+\fancyfoot[C]{\thepage}
+\setlength{\footskip}{30pt}
+
+% Légendes : « Tableau 1 – ... » en petit, au-dessus des tableaux
+\frenchsetup{SmallCapsFigTabCaptions=false}
+\addto\captionsfrench{\renewcommand{\tablename}{Tableau}}
+\captionsetup{font=small, labelfont=bf, labelsep=endash, skip=4pt}
+\captionsetup[table]{position=top}
+
+% Listes et titres plus compacts
+\setlist{itemsep=1pt, topsep=3pt}
+\titlespacing*{\section}{0pt}{10pt plus 2pt minus 2pt}{5pt}
+\titlespacing*{\subsection}{0pt}{8pt plus 2pt minus 2pt}{4pt}
+\titlespacing*{\paragraph}{0pt}{5pt plus 1pt}{0.6em}
+\setlength{\textfloatsep}{10pt plus 2pt minus 2pt}
+\setlength{\floatsep}{8pt plus 2pt minus 2pt}
+
+% Colonnes de tableaux : X aligné à gauche, nombres centrés
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcolumntype{C}{>{\centering\arraybackslash}p{1.45cm}}
+\renewcommand{\arraystretch}{1.05}
+
+% Renomme la bibliographie (après babel, sinon « Références » s'impose)
+\addto\captionsfrench{\renewcommand{\refname}{Bibliographie}}
+
+% Marqueur visible pour les informations restant à fournir
+\newcommand{\afournir}[1]{\textbf{[#1 à compléter]}}
+
+% Affiche une image si le fichier existe, sinon un cadre de réservation.
+% #1 = chemin du fichier, #2 = largeur relative, #3 = description
+\newcommand{\imageoucadre}[3]{%
+  \IfFileExists{#1}%
+    {\includegraphics[width=#2\textwidth]{#1}}%
+    {\fbox{\begin{minipage}[c][4.5cm][c]{#2\textwidth}\centering\small\textit{Image à fournir, #3}\end{minipage}}}%
+}
+
+% Renvoi discret vers une figure des annexes
+\newcommand{\voir}[2]{{\small\textit{(voir \hyperref[#1]{#2})}}}
+
+\begin{document}
+\hypersetup{pageanchor=false}
+
+% ---------------------------------------------------------------
+% Page de garde
+% ---------------------------------------------------------------
+\begin{titlepage}
+    \begin{center}
+
+        {\Huge \textbf{Rapport de mini-projet NLP}} \\[0.9cm]
+        {\LARGE TextBench : deviner le genre d'un livre \\[0.2cm] à partir de son résumé} \\[0.6cm]
+        {\large Comparaison de trois méthodes de classification de textes} \\[1.4cm]
+
+        \imageoucadre{images/CY_Tech.jpg}{0.35}{logo CY Tech} \\[1.2cm]
+
+        {\large
+        \begin{tabular}{ll}
+            \toprule
+            \textbf{Membre} & \textbf{Partie du projet} \\
+            \midrule
+            Elyes   & Données et protocole expérimental \\
+            Clément & Baseline sans apprentissage automatique \\
+            Faiki   & Modèle de Deep Learning (PyTorch) \\
+            Nathan  & Transformer pré-entraîné \\
+            Arno    & Évaluation commune et analyse des erreurs \\
+            \bottomrule
+        \end{tabular}} \\[1.4cm]
+
+        {\normalsize Étudiants ingénieurs, CY Tech} \\[0.2cm]
+        {\normalsize Enseignant : \afournir{Nom de l'enseignant}} \\[0.2cm]
+        {\normalsize Code : dépôt GitHub \texttt{guinat/school-project-nlp-20262027}}
+
+        \vfill
+        {\large Septembre 2026}
+    \end{center}
+\end{titlepage}
+\hypersetup{pageanchor=true}
+
+% ---------------------------------------------------------------
+% Sommaire
+% ---------------------------------------------------------------
+\newpage
+\tableofcontents
+\newpage
+
+% ---------------------------------------------------------------
+% Introduction
+% ---------------------------------------------------------------
+\section*{Introduction}
+\addcontentsline{toc}{section}{Introduction}
+Ce mini-projet consiste à écrire un programme qui lit le résumé d'un livre (le texte de la quatrième de couverture) et qui devine son genre : policier, fantasy, horreur, etc. C'est un problème de \textbf{classification de textes}, un usage courant du traitement automatique du langage (NLP). Le sujet demandait de comparer trois façons de faire, de la plus simple à la plus avancée : (1) une \textbf{baseline} faite de règles écrites à la main, sans apprentissage ; (2) un petit \textbf{réseau de neurones} que nous entraînons nous-mêmes avec PyTorch ; (3) un \textbf{Transformer}, un grand modèle de langue déjà entraîné par d'autres, que nous adaptons à notre tâche. Pour que la comparaison soit juste, les trois systèmes sont interrogés sur les mêmes livres et notés avec le même code. Les mots techniques sont expliqués dans un petit lexique \voir{annexe:lexique}{annexe A}.
+
+% ---------------------------------------------------------------
+% Chapitre 1
+% ---------------------------------------------------------------
+\section{Cas d'usage et données}
+
+\paragraph{Le besoin.} Une librairie en ligne reçoit des fiches de livres dont le genre manque. Notre programme doit proposer un genre à partir du seul résumé, en anglais. Une erreur n'est pas grave (un libraire peut la corriger), mais les genres rares doivent être aussi bien reconnus que les fréquents.
+
+\paragraph{Les données.} Nous sommes partis d'un jeu de données public de 4\,657 résumés de livres, chacun associé à un genre, venant des sites Goodreads et Wikipédia \afournir{Lien vers le jeu de données}. Elyes les a nettoyés : suppression des résumés vides, des restes de code HTML et des doublons. Il reste \textbf{4\,535 résumés}, de 196 mots pour un résumé typique (de 6 à 5\,663 mots). Un livre peut avoir deux genres, mais c'est rare (2~\% des résumés) : nos systèmes renvoient donc une liste de genres, le plus souvent d'un seul élément.
+
+\begin{table}[htbp]
+\centering
+\caption{Les 10 genres et leur nombre de résumés dans chaque partie des données}
+\label{tab:genres}
+\small
+\begin{tabularx}{\textwidth}{l Y r r r}
+\toprule
+\textbf{Genre} & \textbf{Ce que le genre regroupe} & \textbf{Entraînement} & \textbf{Validation} & \textbf{Test} \\
+\midrule
+thriller   & suspense, espionnage, tueurs en série & 807 & 101 & 114 \\
+fantasy    & magie, dragons, mondes imaginaires    & 691 & 86  & 97 \\
+science    & science-fiction et livres de sciences & 509 & 64  & 72 \\
+horror     & horreur, fantômes, surnaturel         & 473 & 59  & 66 \\
+history    & romans historiques, livres d'histoire & 472 & 59  & 66 \\
+crime      & romans policiers, enquêtes            & 395 & 49  & 56 \\
+\textbf{romance}    & histoires d'amour            & 88  & 11  & 12 \\
+\textbf{psychology} & livres de psychologie        & 79  & 10  & 11 \\
+\textbf{travel}     & récits de voyage             & 79  & 10  & 11 \\
+\textbf{sports}     & sport, sportifs              & 67  & 8   & 9 \\
+\midrule
+\textbf{Total de résumés} & & \textbf{3\,580} & \textbf{447} & \textbf{508} \\
+\bottomrule
+\end{tabularx}
+
+\vspace{2pt}
+{\footnotesize Lecture : 807 résumés de thriller servent à l'entraînement. Un livre à deux genres compte dans les deux lignes. En gras : les 4 \og petits genres \fg{}, qui ont chacun moins de 100 résumés d'entraînement.}
+\end{table}
+
+\paragraph{Des données déséquilibrées.} Les 4 petits genres du Tableau~\ref{tab:genres} ne font que 8~\% des livres du test (9 à 12 livres chacun), mais comptent pour 40~\% de notre note principale, qui donne le même poids à chaque genre.
+
+\paragraph{Le protocole.} Les données sont coupées en trois parties, comme pour un élève qui prépare un examen. L'\textbf{entraînement} (3\,580 résumés) est le cours : les modèles apprennent sur ces exemples. La \textbf{validation} (447 résumés) correspond aux exercices : elle sert aux réglages, par exemple pour savoir quand arrêter l'apprentissage. Le \textbf{test} (508 résumés) est l'examen final : il n'est utilisé qu'\textbf{une seule fois}, à la fin. Le découpage garde les mêmes proportions de genres dans les trois parties, avec une graine de hasard fixée (67) pour pouvoir le refaire à l'identique ; les modèles utilisent la graine 42. Aucun résumé n'apparaît dans deux parties.
+
+% ---------------------------------------------------------------
+% Chapitre 2
+% ---------------------------------------------------------------
+\section{Les trois méthodes}
+
+\begin{table}[H]
+\centering
+\caption{Les trois systèmes comparés, en résumé}
+\label{tab:methodes}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\bfseries\arraybackslash}p{2.5cm} Y Y Y}
+\toprule
+ & \textbf{Baseline (Clément)} & \textbf{Deep Learning (Faiki)} & \textbf{Transformer (Nathan)} \\
+\midrule
+Idée & compter des mots-clés écrits à la main & un petit réseau de neurones apprend sur des exemples & un grand modèle de langue déjà entraîné est adapté \\
+Ce qu'il \og lit \fg{} & 272 mots-clés, sans le reste du texte & 20\,000 mots et paires de mots, sans leur ordre (TF-IDF) & les 256 premiers morceaux de mots (tokens), dans l'ordre \\
+Apprentissage & aucun & sur nos 3\,580 résumés & pré-entraîné sur de l'anglais, puis affiné sur nos résumés \\
+Règle de réponse & le genre qui a le plus de points & le genre le plus probable & les genres probables à plus de 50~\%, donc parfois aucun \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Baseline sans apprentissage} (\texttt{src/baseline.py}). Clément a écrit 272 mots-clés rangés par genre. Un indice fort, comme \og vampire \fg{} pour horror, rapporte 2,5 points ; un indice faible, comme \og blood \fg{}, rapporte 1 point. Le programme répond le genre qui a le plus de points (\og thriller \fg{} si aucun mot-clé n'est trouvé). Il peut toujours \textbf{expliquer sa réponse} (fonction \texttt{explain()}), mais ne comprend pas le contexte.
+
+\paragraph{Deep Learning} (\texttt{src/deep\_learning.py}). Un réseau de neurones ne traite que des nombres. Faiki a donc transformé chaque résumé en 20\,000 nombres avec la méthode \textbf{TF-IDF} : chaque nombre correspond à un mot, et il est élevé quand ce mot est fréquent dans ce résumé mais rare dans les autres. Ces nombres passent dans un petit réseau (\textbf{MLP}) : une couche cachée de 256 neurones, puis un score par genre. Le réseau relit plusieurs fois les résumés (chaque passage est une \textbf{époque}) et s'arrête quand sa note de validation ne progresse plus \voir{fig:loss}{annexe B}. Une erreur sur un genre rare \og coûte \fg{} plus cher, pour que les petits genres ne soient pas oubliés.
+
+\paragraph{Transformer} (\texttt{src/transformer.py}). Nathan a utilisé \textbf{DistilBERT}, une version allégée du modèle BERT, déjà entraînée sur une énorme quantité de textes anglais. On lui ajoute une couche de sortie (un score par genre) et on l'entraîne encore 5 époques sur nos résumés : c'est l'\textbf{affinage} (\textit{fine-tuning}). Il tient compte de l'ordre des mots et du contexte, mais il ne lit que les 256 premiers tokens : 48~\% des résumés du test sont coupés.
+
+\subsection*{Comment on note les systèmes}
+\label{sec:mesures}
+Arno a écrit un code commun (\texttt{src/evaluation.py}) qui calcule les mêmes mesures pour les trois systèmes ; il retrouve exactement les notes calculées par chacun (écart de 0). La note principale est le \textbf{F1 macro}, qui oblige à bien traiter les petits genres. Les temps sont mesurés dans les mêmes conditions (même ordinateur, mêmes 508 résumés, processeur).
+
+\begin{table}[htbp]
+\centering
+\caption{Les mesures utilisées, expliquées simplement}
+\label{tab:mesures}
+\small
+\begin{tabularx}{\textwidth}{>{\bfseries}p{1.8cm} Y >{\raggedright\arraybackslash}p{6.4cm}}
+\toprule
+\textbf{Mesure} & \textbf{À quelle question répond-elle ?} & \textbf{Exemple (fictif)} \\
+\midrule
+Accuracy & La réponse est-elle \emph{exactement} juste ? & romance + fantasy classé fantasy : faux. \\
+Précision & Quand il dit \og horror \fg{}, a-t-il raison ? & 10 classés horror, 7 vrais : 0,7. \\
+Rappel & Combien de vrais livres d'horreur retrouve-t-il ? & 20 livres d'horreur, 15 trouvés : 0,75. \\
+F1 & Moyenne des deux, basse si l'un des deux est bas. & précision 0,9, rappel 0,1 : F1 de 0,18. \\
+Macro & Mesure calculée par genre, puis moyenne simple. & sports (9 livres) pèse comme thriller (114). \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ---------------------------------------------------------------
+% Chapitre 3
+% ---------------------------------------------------------------
+\section{Résultats}
+
+\begin{table}[H]
+\centering
+\caption{Résultats des trois systèmes sur les 508 résumés du test (le meilleur en gras)}
+\label{tab:resultats}
+\small
+\begin{tabular}{l c c c c c c c}
+\toprule
+\textbf{Méthode} & \textbf{Accuracy} & \textbf{Précision} & \textbf{Rappel} & \textbf{F1 macro} & \textbf{Entraînement} & \textbf{Réponse} & \textbf{Taille} \\
+\midrule
+Baseline      & 0,415 & 0,426 & 0,613 & 0,464 & 0 s & 1,15 ms & 21 ko \\
+Deep Learning & \textbf{0,701} & \textbf{0,764} & \textbf{0,707} & \textbf{0,730} & 2,9 s & \textbf{0,12 ms} & 22 Mo \\
+Transformer   & 0,650 & 0,754 & 0,584 & 0,654 & 451 s & 10,3 ms & 268 Mo \\
+\bottomrule
+\end{tabular}
+
+\vspace{2pt}
+{\footnotesize Lecture : les notes vont de 0 (tout faux) à 1 (parfait) ; précision, rappel et F1 sont des moyennes macro sur les 10 genres. Entraînement : 0 s pour la baseline (le temps passé à écrire les règles n'est pas mesuré) ; les deux réseaux ont été entraînés sur la puce graphique d'un Mac. Réponse : temps moyen pour classer un résumé, sur le processeur. Taille : fichier du modèle (code et lexique pour la baseline). Détail des coûts en annexe~B.}
+\end{table}
+
+Le Tableau~\ref{tab:resultats} montre trois choses.
+\begin{itemize}
+    \item \textbf{Le Deep Learning est le meilleur partout} : bonne réponse pour 70~\% des livres, entraînement en moins de 3 secondes, réponse \textbf{85 fois plus rapide} que le Transformer.
+    \item \textbf{Le Transformer est deuxième.} Sa précision est bonne (0,754) mais son rappel faible (0,584) : il ne donne un genre que s'il est sûr à plus de 50~\%, si bien que pour \textbf{83 livres (16~\% du test), il ne répond rien}, alors que dans 41 cas son premier choix était le bon.
+    \item \textbf{La baseline est loin derrière} (0,464) : elle donne souvent plusieurs genres (78 fois, pour seulement 6 vrais livres à deux genres), ce qui monte son rappel mais baisse sa précision.
+\end{itemize}
+Un test statistique \voir{annexe:stats}{annexe D} montre que l'avance du Deep Learning sur le Transformer n'est probablement pas due au hasard. Sur les petits genres, un ou deux livres suffisent à faire bouger la note : prudence.
+
+\begin{table}[htbp]
+\centering
+\caption{F1 de chaque genre sur le test (le meilleur de chaque ligne en gras)}
+\label{tab:genres-f1}
+\small
+\begin{tabular}{l c c c c}
+\toprule
+\textbf{Genre} & \textbf{Livres dans le test} & \textbf{Baseline} & \textbf{Deep Learning} & \textbf{Transformer} \\
+\midrule
+thriller   & 114 & 0,44 & 0,66 & \textbf{0,73} \\
+fantasy    & 97  & 0,63 & 0,77 & \textbf{0,80} \\
+science    & 72  & 0,57 & \textbf{0,74} & 0,73 \\
+history    & 66  & 0,40 & \textbf{0,78} & 0,71 \\
+horror     & 66  & 0,46 & 0,61 & \textbf{0,65} \\
+crime      & 56  & 0,46 & \textbf{0,69} & 0,67 \\
+romance    & 12  & 0,45 & \textbf{0,53} & 0,00 \\
+psychology & 11  & 0,47 & \textbf{0,91} & 0,74 \\
+travel     & 11  & 0,17 & \textbf{0,80} & 0,71 \\
+sports     & 9   & 0,58 & \textbf{0,82} & 0,80 \\
+\midrule
+Moyenne des 6 grands genres & & 0,49 & 0,71 & \textbf{0,72} \\
+Moyenne des 4 petits genres & & 0,42 & \textbf{0,77} & 0,56 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Par genre.} Sur les 6 grands genres (Tableau~\ref{tab:genres-f1}), le Deep Learning et le Transformer sont à égalité ; sur les 4 petits, le Deep Learning est bien meilleur et le Transformer ne trouve jamais romance. Les matrices de confusion \voir{fig:confusion}{annexe B} montrent aussi que la baseline classe beaucoup de thrillers en crime (36 sur 110) et que le Deep Learning range les livres ambigus dans thriller, le genre le plus fréquent.
+
+\paragraph{Une expérience en plus.} Avec une règle commune (toujours donner le genre le plus probable, plus ceux au-dessus d'un seuil choisi sur la validation), le Transformer monte à \textbf{0,732}, au niveau du Deep Learning, mais son accuracy tombe à 0,583 et ce gain repose sur une vingtaine de livres : il est fragile \voir{annexe:regle}{annexe C}.
+
+% ---------------------------------------------------------------
+% Chapitre 4
+% ---------------------------------------------------------------
+\section{Analyse des erreurs}
+Pour ne pas choisir les erreurs qui nous arrangent, nous avons défini à l'avance 8 types d'erreurs, puis tiré au hasard un exemple de chaque (deux pour le premier) \voir{annexe:erreurs}{détail en annexe E}. Sur tout le test, 88 livres sont mal classés par les trois systèmes et 151 bien classés par les trois.
+
+\begin{table}[htbp]
+\centering
+\caption{Les 9 erreurs tirées au hasard ($\emptyset$ : aucune réponse ; en gras : réponse juste)}
+\label{tab:erreurs}
+\footnotesize
+\begin{tabularx}{\textwidth}{r >{\itshape}p{2.6cm} l l l l Y}
+\toprule
+\textbf{\No} & \textbf{\upshape Livre} & \textbf{Vrai genre} & \textbf{Baseline} & \textbf{DL} & \textbf{Transf.} & \textbf{Explication simple} \\
+\midrule
+38  & Ring & horror & crime & thriller & $\emptyset$ & écrit comme une enquête \\
+379 & La Peau froide & horror & travel & thriller & $\emptyset$ & 23 mots, aucun indice \\
+236 & The Affair & thriller & crime & \textbf{thriller} & \textbf{thriller} & piège de mots-clés \\
+219 & The Roanoke Girls & thriller & romance, horror & romance & $\emptyset$ & suspense jamais nommé \\
+436 & Girl Next Door & thriller & travel & horror & horror & souvent classé en horreur \\
+116 & Firmin & fantasy & thriller & horror & horror & il faut comprendre le sens \\
+481 & City of Bones & romance, fantasy & crime & fantasy & fantasy & romance suggérée \\
+136 & Neon Gods & romance & fantasy & fantasy & fantasy & romance mythologique \\
+12  & Perfect Chemistry & romance & \textbf{romance} & thriller & $\emptyset$ & petit genre \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Ces erreurs se rangent en quatre familles.
+\begin{enumerate}
+    \item \textbf{Pièges de mots-clés.} Dans le Jack Reacher (\no~236), \og murderer \fg{}, \og investigation \fg{} et \og police \fg{} donnent 4,5 points à crime contre 1 à thriller ; \og a quick tour \fg{} déclenche travel (\no~436). Les réseaux évitent ces pièges.
+    \item \textbf{Le Transformer n'ose pas répondre.} Il place bien horror en premier pour \textit{Ring} (\no~38), mais à 49~\%, et romance pour \textit{Perfect Chemistry} (\no~12), à 38~\% : il ne répond donc rien.
+    \item \textbf{Genres voisins.} Le suspense de \textit{The Roanoke Girls} (\no~219) n'est que suggéré : le Deep Learning hésite entre romance et horror (48~\% chacun). Le fantastique de \textit{Firmin} (\no~116), un rat qui apprend à lire, ne tient à aucun mot.
+    \item \textbf{Données.} Un résumé de 23 mots sans indice ne peut pas être classé (\no~379) ; \textit{Neon Gods} (\no~136) est aussi de la fantasy, mais n'a qu'une étiquette. Enfin, le mot \og (less) \fg{}, reste du site Goodreads, figure dans 100~\% des romances d'entraînement mais dans aucun livre crime ou travel : un biais à corriger, même si son effet est faible (F1 du Transformer de 0,654 à 0,648 sans lui).
+\end{enumerate}
+
+% ---------------------------------------------------------------
+% Chapitre 5
+% ---------------------------------------------------------------
+\section{Conclusion : quel système choisir ?}
+
+\begin{table}[htbp]
+\centering
+\caption{Comparaison finale selon les quatre critères demandés}
+\label{tab:choix}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\bfseries\arraybackslash}p{3.5cm} Y Y Y}
+\toprule
+\textbf{Critère} & \textbf{Baseline} & \textbf{Deep Learning} & \textbf{Transformer} \\
+\midrule
+Qualité (F1 macro) & 0,464 & \textbf{0,730} & 0,654 \\
+Petits genres (F1) & 0,42 & \textbf{0,77} & 0,56 (romance : 0,00) \\
+Coût & aucun entraînement & \textbf{2,9 s, 22 Mo, sans GPU} & 7,5 min sur GPU, 268 Mo \\
+Simplicité & chaque réponse s'explique & deux couches de neurones & lourd, peu explicable \\
+Limite principale & ignore le contexte & ignore l'ordre des mots & se tait quand il doute \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\textbf{Nous retenons le Deep Learning (TF-IDF et MLP).} C'est le meilleur système sur toutes les mesures et sur les petits genres ; il s'entraîne en quelques secondes, fonctionne sur n'importe quel ordinateur et redonne exactement les mêmes réponses quand on le réentraîne avec la même graine. Le Transformer n'est pas mauvais : avec une meilleure règle de réponse, il atteint le même F1 macro, mais il reste bien plus lourd et moins fiable sur les genres rares. La baseline reste un bon point de départ, qui explique ses réponses.
+
+\textbf{Ce que nous retenons :} le plus gros modèle n'est pas forcément le meilleur, la règle de réponse compte presque autant que le modèle, et la qualité des données limite tous les systèmes. Avec plus de temps, nous ferions toujours répondre le Transformer, retirerions \og (less) \fg{} des résumés et collecterions plus de livres pour les petits genres.
+
+\newpage
+
+% ---------------------------------------------------------------
+% Annexes
+% ---------------------------------------------------------------
+\section*{Annexes}
+\addcontentsline{toc}{section}{Annexes}
+
+\subsection*{Annexe A -- Petit lexique}
+\label{annexe:lexique}
+\addcontentsline{toc}{subsection}{Annexe A -- Petit lexique}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\bfseries\arraybackslash}p{3.6cm} Y}
+\toprule
+\textbf{Terme} & \textbf{Explication} \\
+\midrule
+Classification & Ranger chaque texte dans une ou plusieurs catégories connues à l'avance, ici les 10 genres. \\
+Multi-label & Un texte peut recevoir plusieurs catégories à la fois (un livre romance et fantasy). \\
+Entraînement, validation, test & Les trois parties des données : pour apprendre, pour régler, et pour la note finale. \\
+Graine (\textit{seed}) & Nombre qui fixe le hasard de l'ordinateur, pour obtenir les mêmes résultats à chaque exécution. \\
+Token & Morceau de mot utilisé par le Transformer (\og reading \fg{} peut devenir \og read \fg{} + \og ing \fg{}). \\
+TF-IDF & Méthode qui transforme un texte en nombres : un mot compte beaucoup s'il est fréquent dans ce texte et rare dans les autres. \\
+Réseau de neurones, MLP & Programme composé de couches de calculs simples dont les réglages (les paramètres) sont appris à partir d'exemples. Un MLP est le réseau le plus simple. \\
+Paramètres & Les nombres que le réseau ajuste pendant l'apprentissage. \\
+Époque & Un passage complet sur toutes les données d'entraînement. \\
+Loss & Nombre qui mesure à quel point le modèle se trompe pendant l'apprentissage ; on cherche à le faire baisser. \\
+Arrêt anticipé & On arrête l'apprentissage quand la note de validation ne progresse plus. \\
+Sur-apprentissage & Le modèle apprend les exemples d'entraînement \og par c\oe{}ur \fg{} et devient moins bon sur des textes nouveaux. \\
+Transformer & Type de réseau qui lit le texte en tenant compte du contexte de chaque mot. BERT et DistilBERT en sont des exemples. \\
+Pré-entraîné, affinage & Un modèle pré-entraîné a déjà appris la langue sur beaucoup de textes. L'affinage l'adapte ensuite à notre tâche. \\
+Seuil de décision & Probabilité minimale pour qu'un système donne un genre (par exemple 50~\%). \\
+Matrice de confusion & Tableau qui croise le vrai genre et le genre prédit, pour voir quelles erreurs reviennent. \\
+Intervalle de confiance & Fourchette dans laquelle la note se trouverait probablement avec d'autres livres de test. \\
+CPU, GPU (MPS) & Le processeur de l'ordinateur, et la puce graphique, plus rapide pour les réseaux de neurones (MPS sur Mac). \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\newpage
+\subsection*{Annexe B -- Figures et coûts}
+\addcontentsline{toc}{subsection}{Annexe B -- Figures et coûts}
+
+\begin{table}[H]
+\centering
+\caption{Ce que coûte chaque système}
+\label{tab:couts}
+\small
+\begin{tabularx}{\textwidth}{Y c c c c c}
+\toprule
+\textbf{Méthode} & \textbf{Paramètres} & \textbf{Fichier} & \textbf{Entraînement} & \textbf{Réponse CPU} & \textbf{Réponse GPU} \\
+\midrule
+Baseline      & 0 (272 mots-clés) & 21 ko  & 0 s             & 1,15 ms & -- \\
+Deep Learning & 5,1 millions      & 22 Mo  & 2,9 s           & 0,12 ms & 0,15 ms \\
+Transformer   & 67 millions       & 268 Mo & 451 s (7,5 min) & 10,3 ms & 5,6 ms \\
+\bottomrule
+\end{tabularx}
+
+\vspace{2pt}
+{\footnotesize Mesures faites sur le même Mac, sur les 508 résumés du test, après un premier passage d'échauffement non compté ; temps de réponse moyen pour un résumé, médiane de 3 passages. GPU : la puce graphique du Mac (MPS). Entraînement du Deep Learning : médiane de 2 entraînements (5,3 s lors du premier entraînement de Faiki).}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \imageoucadre{images/matrices_confusion.png}{1}{matrices de confusion}
+    \caption{Matrices de confusion des trois systèmes, sur les 502 livres du test qui n'ont qu'un seul genre. Chaque ligne est un vrai genre, chaque colonne un genre prédit ; la colonne \og (aucun) \fg{} compte les livres sans réponse. Un chiffre sur la diagonale est une bonne réponse. Plus la case est foncée, plus la part des livres de la ligne est grande.}
+    \label{fig:confusion}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \imageoucadre{images/f1_par_classe_test.png}{1}{F1 par genre}
+    \caption{F1 de chaque genre sur le test (n : nombre de livres du test). La barre jaune correspond au Transformer avec la règle de réponse commune (annexe~C). Le Transformer livré ne trouve jamais romance.}
+    \label{fig:f1genre}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \imageoucadre{images/courbes_loss.png}{1}{courbes d'apprentissage}
+    \caption{Courbes d'apprentissage : la loss (l'erreur) sur l'entraînement et sur la validation après chaque époque. Pour les deux réseaux, la loss de validation cesse de baisser alors que celle d'entraînement continue : c'est le début du sur-apprentissage. Le trait pointillé indique le modèle gardé, choisi sur la validation. Les deux échelles ne sont pas comparables, car la loss du Deep Learning donne plus de poids aux petits genres.}
+    \label{fig:loss}
+\end{figure}
+
+\subsection*{Annexe C -- La règle de réponse commune}
+\addcontentsline{toc}{subsection}{Annexe C -- La règle de réponse commune}
+\label{annexe:regle}
+Règle : on donne toujours le genre le plus probable, plus les autres genres dont le score dépasse un seuil. Pour la baseline, qui n'a pas de probabilités, le seuil porte sur la part du meilleur score, ce qui correspond à sa propre règle. Le seuil est choisi sur la validation (Tableau~\ref{tab:grille}), puis appliqué une seule fois au test (Tableau~\ref{tab:regle}).
+
+\begin{table}[H]
+\centering
+\caption{F1 macro sur la validation selon le seuil (le seuil retenu est en gras)}
+\label{tab:grille}
+\small
+\begin{tabular}{l c c c}
+\toprule
+\textbf{Seuil} & \textbf{Baseline} & \textbf{Deep Learning} & \textbf{Transformer} \\
+\midrule
+0,2 & 0,355 & 0,559 & \textbf{0,734} \\
+0,3 & 0,395 & 0,648 & 0,696 \\
+0,4 & 0,411 & 0,687 & 0,689 \\
+0,5 & 0,437 & 0,728 & 0,681 \\
+0,6 & 0,465 & \textbf{0,737} & 0,679 \\
+0,7 & 0,467 & 0,712 & 0,679 \\
+0,8 & 0,475 & 0,716 & 0,679 \\
+0,9 & 0,486 & 0,717 & 0,679 \\
+un seul genre & \textbf{0,487} & 0,717 & 0,679 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Résultats sur le test avec la règle commune, à comparer au Tableau~\ref{tab:resultats}}
+\label{tab:regle}
+\small
+\begin{tabular}{l c c c c c}
+\toprule
+\textbf{Méthode (seuil)} & \textbf{Accuracy} & \textbf{Précision} & \textbf{Rappel} & \textbf{F1 macro} & \textbf{F1 livré} \\
+\midrule
+Baseline (un seul genre) & 0,455 & 0,452 & 0,559 & 0,449 & 0,464 \\
+Deep Learning (0,6)      & 0,671 & 0,725 & 0,719 & 0,719 & 0,730 \\
+Transformer (0,2)        & 0,583 & 0,697 & 0,783 & 0,732 & 0,654 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Seul le Transformer progresse : le seuil choisi sur la validation fait un peu moins bien que le réglage d'origine pour la baseline et le Deep Learning. Pour le Transformer, le seuil de 0,2 est au bord de la grille, et le saut de 0,696 à 0,734 sur la validation vient surtout de romance (F1 de 0,154 à 0,471) et de travel (de 0,824 à 0,889), soit une vingtaine de livres. Avec si peu d'exemples, un réglage fin sur la validation se transfère mal au test.
+
+\subsection*{Annexe D -- Est-ce que les écarts sont dus au hasard ?}
+\addcontentsline{toc}{subsection}{Annexe D -- Tests statistiques}
+\label{annexe:stats}
+Nous avons tiré 1\,000 fois au hasard un nouveau \og faux test \fg{} de 508 livres parmi les livres du test (méthode du \textit{bootstrap}, graine 42). Pour 95~\% de ces tirages, la note tombe dans la fourchette indiquée : c'est l'intervalle de confiance. Pour comparer deux systèmes sur l'accuracy, le test de McNemar regarde les livres où un seul des deux a raison. Si la valeur $p$ est inférieure à 0,05, l'écart n'est probablement pas dû au hasard.
+
+\begin{table}[H]
+\centering
+\caption{Intervalles de confiance à 95~\% du F1 macro (test)}
+\small
+\begin{tabular}{l c c}
+\toprule
+\textbf{Méthode} & \textbf{F1 macro} & \textbf{Intervalle de confiance} \\
+\midrule
+Baseline      & 0,464 & de 0,414 à 0,507 \\
+Deep Learning & 0,730 & de 0,669 à 0,777 \\
+Transformer   & 0,654 & de 0,596 à 0,696 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Comparaisons deux à deux (A contre B)}
+\small
+\begin{tabularx}{\textwidth}{Y >{\centering\arraybackslash}p{1.3cm} >{\centering\arraybackslash}p{3.1cm} >{\centering\arraybackslash}p{1.4cm} >{\centering\arraybackslash}p{1.4cm} >{\centering\arraybackslash}p{1.5cm}}
+\toprule
+\textbf{A contre B} & \textbf{Écart de F1} & \textbf{Intervalle de l'écart} & \textbf{Justes pour A seul} & \textbf{Justes pour B seul} & \textbf{$p$ (McNemar)} \\
+\midrule
+Deep Learning contre Transformer & 0,076 & de 0,015 à 0,135 & 77 & 51 & 0,027 \\
+Deep Learning contre Transformer avec la règle commune & $-$0,002 & de $-$0,060 à 0,057 & 108 & 48 & $2\cdot10^{-6}$ \\
+Deep Learning contre Baseline & 0,266 & de 0,203 à 0,331 & 180 & 35 & $1\cdot10^{-24}$ \\
+\bottomrule
+\end{tabularx}
+
+\vspace{2pt}
+{\footnotesize Lecture de la deuxième ligne : les deux systèmes ont le même F1 macro (l'intervalle contient 0), mais le Deep Learning donne beaucoup plus souvent la réponse exacte (108 livres contre 48).}
+\end{table}
+
+\subsection*{Annexe E -- Les erreurs en détail}
+\addcontentsline{toc}{subsection}{Annexe E -- Les erreurs en détail}
+\label{annexe:erreurs}
+Les 8 types d'erreurs, fixés avant le tirage, sont : les trois systèmes se trompent (88 candidats) ; seule la baseline se trompe (128) ; le Transformer ne répond rien (83) ; confusion entre thriller, crime et horror (61) ; confusion entre fantasy et horror (18) ; livre à plusieurs genres (6) ; genre douteux, quand les deux réseaux sont d'accord contre l'étiquette avec au moins 80~\% de probabilité (7) ; petit genre manqué par le Deep Learning (13). Le tableau ci-dessous donne, pour chaque erreur, les mots-clés trouvés par la baseline (avec leurs points) et les trois genres les plus probables selon les deux réseaux.
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{tabularx}{\textwidth}{r Y Y Y}
+\toprule
+\textbf{\No} & \textbf{Baseline : points (mots-clés trouvés)} & \textbf{Deep Learning : probabilités} & \textbf{Transformer : probabilités} \\
+\midrule
+38  & crime 2 (investigation, witnesses) & thriller 0,37 ; crime 0,30 ; horror 0,22 & horror 0,49 ; thriller 0,47 ; crime 0,08 \\
+379 & travel 1 (island) & thriller 0,64 ; romance 0,25 ; travel 0,23 & science 0,18 ; thriller 0,16 ; horror 0,07 \\
+236 & crime 4,5 (murderer, investigation, police) ; history 1 (soldier) ; thriller 1 (killer) & thriller 0,89 ; crime 0,20 ; horror 0,18 & thriller 0,94 ; romance 0,04 ; fantasy 0,03 \\
+219 & horror 1 (darkness) ; romance 1 (heart) & romance 0,48 ; horror 0,48 ; fantasy 0,26 & horror 0,35 ; thriller 0,17 ; fantasy 0,14 \\
+436 & travel 3,5 (travel, tour) ; crime 2 (crime, police) & horror 0,39 ; history 0,22 ; science 0,19 & horror 0,68 ; thriller 0,15 ; crime 0,04 \\
+116 & aucun mot-clé, donc thriller par défaut & horror 0,40 ; science 0,33 ; fantasy 0,27 & horror 0,64 ; thriller 0,09 ; fantasy 0,08 \\
+481 & crime 7 (murder, murderers, police, witness) ; fantasy 3 (demon, demons, warriors) ; horror 1 (blood) & fantasy 0,55 ; horror 0,43 ; romance 0,33 & fantasy 0,75 ; horror 0,18 ; thriller 0,03 \\
+136 & fantasy 2,5 (spell) ; history 1 (war) ; thriller 1 (dangerous) & fantasy 0,85 ; romance 0,27 ; thriller 0,20 & fantasy 0,94 ; romance 0,06 ; horror 0,04 \\
+12  & romance 4,5 (passionate, boyfriend, chemistry) ; crime 1 (clue) ; thriller 1 (secret) & thriller 0,59 ; romance 0,38 ; sports 0,26 & romance 0,38 ; thriller 0,29 ; sports 0,19 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Début des résumés concernés, en anglais :
+\begin{itemize}\footnotesize
+    \item[38] \textit{``After four teenagers mysteriously die simultaneously in Tokyo, Kazuyuki Asakawa, a reporter [...] decides to launch his own personal investigation.''}
+    \item[379] \textit{``The novel chronicles the stay of an unnamed weather official on a remote island in the south Atlantic close to the Antarctic Circle.''}
+    \item[236] \textit{``March 1997. A woman has her throat cut behind a bar in Carter Crossing, Mississippi. [...] Is the murderer a local guy - or is he a soldier?''}
+    \item[219] \textit{``Lane Roanoke is fifteen when she comes to live with her grandparents [...] either the girls run, or they die.''}
+    \item[436] \textit{``The story takes place in 1960s suburban United States [...] After giving the reader a quick tour of his neighborhood [...]''}
+    \item[116] \textit{``Firmin, is a rat and the runt son of an alcoholic mother living in 1960s Boston [...] eventually he learns to read.''}
+    \item[481] \textit{``When fifteen-year-old Clary Fray heads out to the Pandemonium Club in New York City, she hardly expects to witness a murder [...]''}
+    \item[136] \textit{``He was supposed to be a myth. But from the moment I crossed the River Styx and fell under his dark spell [...]''}
+    \item[12] \textit{``A fresh, urban twist on the classic tale of star-crossed lovers. When Brittany Ellis walks into chemistry class [...]''}
+\end{itemize}
+
+\subsection*{Annexe F -- Refaire nos expériences}
+\addcontentsline{toc}{subsection}{Annexe F -- Refaire nos expériences}
+Tout le code est dans le dépôt du projet ; le fichier \texttt{README.txt} détaille chaque étape. Avec Python 3.12 et l'outil \texttt{uv} :
+\begin{verbatim}
+uv sync                               # installe les dépendances
+uv run jupyter nbconvert --to notebook --execute \
+       --inplace notebooks/projet.ipynb  # exécute le notebook
+uv run python src/run_evaluation.py   # relance les 3 systèmes (1 min)
+uv run python src/analysis.py         # refait tableaux, figures, erreurs
+\end{verbatim}
+Tous les chiffres de ce rapport viennent des fichiers du dossier \texttt{results/evaluation/}, produits par ces commandes.
+
+\newpage
+\addcontentsline{toc}{section}{Bibliographie}
+\begin{thebibliography}{99}
+
+\bibitem{sujet}
+Sujet du mini-projet NLP, \textit{TextBench : comparaison de trois systèmes de classification de textes}, document de cours.
+
+\bibitem{donnees}
+Jeu de données de résumés de livres (Goodreads et Wikipédia). \afournir{Source exacte et lien}
+
+\bibitem{distilbert}
+V.~Sanh, L.~Debut, J.~Chaumond, T.~Wolf, \textit{DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter}, 2019. \\
+\url{https://arxiv.org/abs/1910.01108}
+
+\bibitem{bert}
+J.~Devlin, M.-W.~Chang, K.~Lee, K.~Toutanova, \textit{BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding}, 2019. \\
+\url{https://arxiv.org/abs/1810.04805}
+
+\bibitem{hf}
+Hugging Face, \textit{Transformers}, documentation officielle. \\
+\url{https://huggingface.co/docs/transformers}
+
+\bibitem{pytorch}
+PyTorch, documentation officielle. \\
+\url{https://pytorch.org/docs/stable/}
+
+\bibitem{tfidf}
+scikit-learn, \textit{TfidfVectorizer}, documentation officielle. \\
+\url{https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfVectorizer.html}
+
+\bibitem{metrics}
+scikit-learn, \textit{Metrics and scoring: quantifying the quality of predictions}, documentation officielle. \\
+\url{https://scikit-learn.org/stable/modules/model_evaluation.html}
+
+\bibitem{strat}
+\textit{iterative-stratification}, bibliothèque Python de découpage stratifié pour données multi-label (utilisée par \texttt{notebooks/spliting.ipynb}). \\
+\url{https://github.com/trent-b/iterative-stratification}
+
+\end{thebibliography}
+
+\end{document}

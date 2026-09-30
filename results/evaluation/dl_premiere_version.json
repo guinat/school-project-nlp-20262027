@@ -1,0 +1,21 @@
+{
+  "commit": "5cd4b7b",
+  "rule": "un genre des que sa probabilite atteint 0,5 (regle independante)",
+  "device": "mps",
+  "best_epoch": 7,
+  "epochs_run": 11,
+  "validation": {
+    "accuracy": 0.5592841163310962,
+    "precision_macro": 0.7530614406042859,
+    "recall_macro": 0.6400125082367182,
+    "f1_macro": 0.6886250839811483,
+    "f1_micro": 0.71280276816609,
+    "n_examples": 447,
+    "n_empty_predictions": 98,
+    "n_multi_predictions": 57,
+    "labels_per_example": 0.9172259507829977
+  },
+  "validation_empty_share": 0.21923937360178972,
+  "validation_multi_share": 0.12751677852348994,
+  "validation_true_multi_share": 0.02237136465324385
+}

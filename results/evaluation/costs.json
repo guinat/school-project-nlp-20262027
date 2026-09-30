@@ -1,0 +1,19 @@
+{
+  "baseline": {
+    "learned_parameters": 0,
+    "keywords": 272,
+    "disk_bytes": 21030,
+    "disk_note": "src/baseline.py (lexique compris)"
+  },
+  "deep_learning": {
+    "learned_parameters": 5122826,
+    "vocabulary": 20000,
+    "disk_bytes": 22092347,
+    "disk_note": "best_model.pt (poids + vectoriseur TF-IDF)"
+  },
+  "transformer": {
+    "learned_parameters": 66961162,
+    "disk_bytes": 267857176,
+    "disk_note": "best_model/model.safetensors (fp32)"
+  }
+}

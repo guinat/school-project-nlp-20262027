@@ -1,0 +1,5 @@
+| Méthode | Accuracy | Précision | Rappel | F1 macro | Train | Inférence |
+| --- | --- | --- | --- | --- | --- | --- |
+| Baseline | 0.452 | 0.446 | 0.638 | 0.486 | 0 s | 1.15 ms/ex. |
+| Deep Learning | 0.700 | 0.789 | 0.678 | 0.716 | 2.9 s | 0.12 ms/ex. |
+| Transformer | 0.655 | 0.770 | 0.592 | 0.658 | 451.5 s | 10.27 ms/ex. |

@@ -7,6 +7,9 @@ requires-python = ">=3.12"
 dependencies = [
     "accelerate>=1.15.0",
     "datasets>=5.0.1",
+    "ipykernel>=7.3.0",
+    "matplotlib>=3.11.2",
+    "nbconvert>=7.17.1",
     "numpy>=2.5.3",
     "pandas>=3.0.5",
     "scikit-learn>=1.9.1",

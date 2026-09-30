@@ -1,0 +1,11 @@
+vrai,crime,fantasy,history,horror,psychology,romance,science,sports,thriller,travel,(aucun)
+crime,33,0,4,1,0,0,0,0,4,0,14
+fantasy,1,77,3,1,0,0,5,0,2,0,6
+history,1,4,45,2,0,0,0,0,2,0,12
+horror,2,5,2,38,0,0,0,0,7,0,9
+psychology,0,0,0,0,6,0,0,0,0,0,4
+romance,0,2,0,0,0,0,0,0,1,0,8
+science,0,6,3,2,1,0,47,0,1,0,11
+sports,0,0,0,0,0,0,0,6,1,0,2
+thriller,5,2,2,8,0,0,4,0,75,0,14
+travel,0,0,1,0,0,0,1,0,0,6,3
