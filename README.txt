@@ -86,9 +86,10 @@ Les données prêtes à l'emploi sont versionnées dans data/processed/ : il n'y
 télécharger pour exécuter le projet.
 
 Le fichier brut data/raw/data.csv (4 657 résumés ; colonnes index, title, genre, summary)
-n'est pas versionné. Des traces dans les textes indiquent qu'il vient de Goodreads et de
-Wikipédia.
-  [À COMPLÉTER par Elyes : URL de téléchargement et licence du jeu de données]
+n'est pas versionné. Il provient du jeu de données public « Book Genre Prediction »
+publié sur Kaggle (résumés issus de Goodreads et de Wikipédia) :
+  https://www.kaggle.com/datasets/athu1105/book-genre-prediction
+La licence est indiquée sur cette page.
 
 Pour refaire le nettoyage et le découpage :
   1. placer le fichier brut dans data/raw/data.csv ;
@@ -132,6 +133,11 @@ c) Évaluation commune
    run_evaluation.py a besoin des modèles sauvegardés : results/deep_learning/best_model.pt
    et results/transformer/best_model/. Il ne réentraîne pas le transformer.
    analysis.py ne lit que results/evaluation/.
+   Historique du Deep Learning (environ 10 s, nécessite git) :
+     uv run python src/run_evaluation.py --stage history
+   Cette étape réentraîne en mémoire la première version du modèle (commit 5cd4b7b, un genre
+   dès que sa probabilité atteint 0,5) et écrit results/evaluation/dl_premiere_version.json.
+   Elle montre pourquoi la règle de réponse a été changée ensuite.
 
 d) Rapport
    La source est report/latex/rapport.tex. Pour la compiler, deux possibilités :

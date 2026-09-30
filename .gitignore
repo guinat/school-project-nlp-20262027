@@ -24,7 +24,9 @@ results/*
 .DS_Store
 
 # conception
-designingWork# Sorties de compilation LaTeX
+designingWork
+
+# Sorties de compilation LaTeX
 report/latex/*.pdf
 report/latex/*.aux
 report/latex/*.log
